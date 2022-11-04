@@ -346,6 +346,9 @@ hook_pwritev(unsigned long fd, const struct iovec* iov, unsigned long iovcnt,
     return syscall_no_intercept_wrapper(SYS_pwritev, fd, iov, iovcnt, pos_l);
 }
 
+// unlink 只可以删除文件。
+// unlinkat 可以删除文件（默认）或文件夹（需要设置flags为AT_REMOVEDIR）。
+// remove 可以删除文件，或者文件夹。(可以认为remove底层是unlinkat一样的实现，只不过不需要针对是文件夹时，指定参数AT_REMOVEDIR)
 int
 hook_unlinkat(int dirfd, const char* cpath, int flags) {
 
@@ -384,6 +387,7 @@ hook_unlinkat(int dirfd, const char* cpath, int flags) {
     }
 }
 
+// 软连接，不支持
 int
 hook_symlinkat(const char* oldname, int newdfd, const char* newname) {
 
@@ -421,7 +425,7 @@ hook_symlinkat(const char* oldname, int newdfd, const char* newname) {
     }
 }
 
-
+// mask完全没用 mask用于权限判断
 int
 hook_access(const char* path, int mask) {
 
@@ -438,6 +442,7 @@ hook_access(const char* path, int mask) {
     return syscall_no_intercept_wrapper(SYS_access, rel_path.c_str(), mask);
 }
 
+// 和上面那个差不多
 int
 hook_faccessat(int dirfd, const char* cpath, int mode) {
 
