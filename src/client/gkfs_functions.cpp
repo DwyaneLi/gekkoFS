@@ -485,6 +485,7 @@ gkfs_lseek(unsigned int fd, off_t offset, unsigned int whence) {
  * @param offset
  * @param whence
  * @return 0 on success, -1 on failure
+ * 这里写错了，返回的是偏移量
  */
 off_t
 gkfs_lseek(shared_ptr<gkfs::filemap::OpenFile> gkfs_fd, off_t offset,
