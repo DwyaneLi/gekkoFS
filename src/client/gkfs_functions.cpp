@@ -677,7 +677,7 @@ gkfs_pwrite(std::shared_ptr<gkfs::filemap::OpenFile> file, const char* buf,
 
 /**
  * gkfs wrapper for pwrite() system calls
- * // 对pwrite的封装，pwrite是通过path，ws是通过fd
+ * // 对pwrite的封装，pwrite是通过file，ws是通过fd
  * errno may be set
  * @param fd
  * @param buf
