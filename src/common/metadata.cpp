@@ -46,6 +46,7 @@ static const char MSP = '|'; // metadata separator
 Metadata::Metadata(const mode_t mode)
     : atime_(), mtime_(), ctime_(), mode_(mode), link_count_(0), size_(0),
       blocks_(0) {
+    // 断言判断模式
     assert(S_ISDIR(mode_) || S_ISREG(mode_));
 }
 

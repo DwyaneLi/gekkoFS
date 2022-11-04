@@ -32,10 +32,12 @@
 
 namespace gkfs::path {
 
+// 看path中前几块和components中相匹配，并且path到底有几块
 unsigned int
 match_components(const std::string& path, unsigned int& path_components,
                  const std::vector<std::string>& components);
 
+// 将path的规范形式表示填充到resolved中，如果在gekkofs的命名空间内则返回true，否则返回false
 bool
 resolve(const std::string& path, std::string& resolved,
         bool resolve_last_link = true);

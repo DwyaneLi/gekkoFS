@@ -57,6 +57,7 @@ struct MetadentryUpdateFlags {
 
 // Hermes instance
 namespace hermes {
+// 异步引擎
 class async_engine;
 }
 
@@ -70,9 +71,11 @@ to_underlying(E e) {
     return static_cast<typename std::underlying_type<E>::type>(e);
 }
 
+// 通过rpc获取metadata
 std::optional<gkfs::metadata::Metadata>
 get_metadata(const std::string& path, bool follow_links = false);
 
+// 将metadata转换成一个stat结构体
 int
 metadata_to_stat(const std::string& path, const gkfs::metadata::Metadata& md,
                  struct stat& attr);

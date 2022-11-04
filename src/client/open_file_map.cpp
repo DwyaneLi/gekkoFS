@@ -60,6 +60,7 @@ OpenFile::OpenFile(const string& path, const int flags, FileType type)
     pos_ = 0; // If O_APPEND flag is used, it will be used before each write.
 }
 
+// fd_idx从1000开始
 OpenFileMap::OpenFileMap() : fd_idx(10000), fd_validation_needed(false) {}
 
 string
@@ -123,6 +124,7 @@ OpenFileMap::get_dir(int dirfd) {
     return static_pointer_cast<OpenDir>(f);
 }
 
+// 看已经打开的文件里是否存在这个文件
 bool
 OpenFileMap::exist(const int fd) {
     lock_guard<recursive_mutex> lock(files_mutex_);
@@ -130,6 +132,7 @@ OpenFileMap::exist(const int fd) {
     return !(f == files_.end());
 }
 
+// 检查fd是否仍在使用，如果是则生成另一个
 int
 OpenFileMap::safe_generate_fd_idx_() {
     auto fd = generate_fd_idx();
@@ -144,6 +147,9 @@ OpenFileMap::safe_generate_fd_idx_() {
      * once and we start again, in which case the fd_validation_needed flag is
      * set. fd_validation is set to false, if
      */
+    // 因为经过一轮后，可能会有冲突的情况，所以经过一轮后，fd_validation_needed会被设置成true
+    // 然后就会循环找一个安全的
+
     if(fd_validation_needed) {
         while(exist(fd)) {
             fd = generate_fd_idx();
@@ -168,6 +174,7 @@ OpenFileMap::remove(const int fd) {
         return false;
     }
     files_.erase(fd);
+    // 当没有打开的文件的时候，fd_validation也该重置成false了
     if(fd_validation_needed && files_.empty()) {
         fd_validation_needed = false;
         LOG(DEBUG, "fd_validation flag reset");
@@ -212,6 +219,7 @@ OpenFileMap::dup2(const int oldfd, const int newfd) {
 
 /**
  * Generate new file descriptor index to be used as an fd within one process
+ * 生成新的文件描述符索引，在一个进程中用作fd
  * @return fd_idx
  */
 int
@@ -222,7 +230,7 @@ OpenFileMap::generate_fd_idx() {
         LOG(WARNING,
             "File descriptor index exceeded ints max value. Setting it back to 100000");
         /*
-         * Setting fd_idx back to 3 could have the effect that fd are given
+         * Setting fd_idx back to 3（写错了这里应该是100000） could have the effect that fd are given
          * twice for different path. This must not happen. Instead a flag is set
          * which tells can tell the OpenFileMap that it should check if this fd
          * is really safe to use.

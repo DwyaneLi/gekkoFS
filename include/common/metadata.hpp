@@ -43,16 +43,16 @@ constexpr mode_t LINK_MODE = ((S_IRWXU | S_IRWXG | S_IRWXO) | S_IFLNK);
 class Metadata {
 private:
     time_t atime_{}; // access time. gets updated on file access unless mounted
-                     // with noatime
-    time_t mtime_{}; // modify time. gets updated when file content is modified.
+                     // with noatime 访问时间
+    time_t mtime_{}; // modify time. gets updated when file content is modified. 修改时间（文件内容被修改的时间）
     time_t ctime_{}; // change time. gets updated when the file attributes are
-                     // changed AND when file content is modified.
-    mode_t mode_{};
-    nlink_t link_count_{}; // number of names for this inode (hardlinks)
-    size_t size_{};     // size_ in bytes, might be computed instead of stored
-    blkcnt_t blocks_{}; // allocated file system blocks_
+                     // changed AND when file content is modified. 改变时间（文件内容和属性被修改的时间）
+    mode_t mode_{};  // 文件属性位掩码的类型
+    nlink_t link_count_{}; // number of names for this inode (hardlinks) inode硬连接的数量
+    size_t size_{};     // size_ in bytes, might be computed instead of stored  文件大小
+    blkcnt_t blocks_{}; // allocated file system blocks_ 文件块的数量
 #ifdef HAS_SYMLINKS
-    std::string target_path_; // For links this is the path of the target file
+    std::string target_path_; // For links this is the path of the target file 对于链接，这是目标文件的路径
 #endif
 
 
@@ -67,15 +67,17 @@ public:
 
 #endif
 
-    // Construct from a binary representation of the object
+    // Construct from a binary representation of the object 从对象的二进制表示形式构造
     explicit Metadata(const std::string& binary_str);
 
+    // 用于元数据的序列化，序列化为一个字符串， 其中的设置和配置文件有关（config.hpp）
     std::string
     serialize() const;
 
     void
     init_ACM_time();
 
+    // 更新时间，哪个bool为真更新哪一个
     void
     update_ACM_time(bool a, bool c, bool m);
 

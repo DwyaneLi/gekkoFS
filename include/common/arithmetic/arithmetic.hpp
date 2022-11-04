@@ -32,12 +32,12 @@
 #include <cstdint>
 #include <unistd.h>
 #include <cassert>
-
+// 一些用于计算的函数
 namespace gkfs::utils::arithmetic {
 
 /**
  * Check whether integer `n` is a power of 2.
- *
+ * 查看n是否为2的幂
  * @param [in] n the number to check.
  * @returns `true` if `n` is a power of 2; `false` otherwise.
  */
@@ -48,7 +48,7 @@ is_power_of_2(uint64_t n) {
 
 /**
  * Compute the base2 logarithm for 64 bit integers.
- *
+ * 计算以2为底的对数
  * @param [in] n the number from which to compute the log2.
  * @returns the base 2 logarithm of `n`.
  */
@@ -60,7 +60,7 @@ log2(uint64_t n) {
 /**
  * Check whether @n is aligned to a block boundary, i.e. if it is divisible by
  * @block_size.
- *
+ * 计算n能否被块大小整除，也就是判断是否对齐
  * @note This function assumes that block_size is a power of 2.
  *
  * @param [in] n the number to check.
@@ -77,7 +77,8 @@ is_aligned(const uint64_t n, const size_t block_size) {
 /**
  * Given a file @offset and a @block_size, align the @offset to its
  * closest left-side block boundary.
- *
+ * 给定文件@offset和@block_size，将@offset对齐到其最接近的左侧块边界。
+ * 也就是低位清0
  * @note This function assumes that block_size is a power of 2.
  *
  * @param [in] offset the offset to align.
@@ -95,7 +96,7 @@ align_left(const uint64_t offset, const size_t block_size) {
 /**
  * Given a file @offset and a @block_size, align the @offset to its
  * closest right-side block boundary.
- *
+ * 给定文件@offset和@block_size，将@offset对齐到其最接近的右侧块边界。
  * @note This function assumes that block_size is a power of 2.
  *
  * @param [in] offset the offset to align.
@@ -113,7 +114,7 @@ align_right(const uint64_t offset, const size_t block_size) {
 /**
  * Return the overrun bytes that separate @offset from the closest left side
  * block boundary.
- *
+ * 返回将@offset与最接近的左侧块边界分隔开的溢出字节。 也就是比左边多多少
  * @note This function assumes that block_size is a power of 2.
  *
  * @param [in] offset the offset for which the overrun distance should be
@@ -132,7 +133,7 @@ block_overrun(const uint64_t offset, const size_t block_size) {
 /**
  * Return the underrun bytes that separate @offset from the closest right side
  * block boundary.
- *
+ * 返回将@offset与最近的右侧块边界分隔开的下面运行字节 也就是离右差多少
  * @note This function assumes that block_size is a power of 2.
  *
  * @param [in] offset the offset for which the overrun distance should be
@@ -151,7 +152,7 @@ block_underrun(const uint64_t offset, const size_t block_size) {
 /**
  * Given an @offset and a @block_size, compute the block index to which @offset
  * belongs.
- *
+ * 计算offset对应的块索引
  * @note Block indexes are (conceptually) computed by dividing @offset
  * by @block_size, with index 0 referring to block [0, block_size - 1],
  * index 1 to block [block_size, 2 * block_size - 1], and so on up to
@@ -178,7 +179,7 @@ block_index(const uint64_t offset, const size_t block_size) {
 /**
  * Compute the number of blocks involved in an operation affecting the
  * regions from [@offset, to @offset + @count).
- *
+ * 计算涉及的操作影响的块数
  * @note This function assumes that @block_size is a power of 2.
  * @note This function assumes that @offset + @count does not
  * overflow.

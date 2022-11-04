@@ -37,6 +37,7 @@ namespace gkfs::rpc {
 /**
  * Gets fs configuration information from the running daemon and transfers it to
  * the memory of the library
+ * // 从正在运行的守护进程获取fs配置信息，并将其传输到库的内存中
  * @return
  */
 bool

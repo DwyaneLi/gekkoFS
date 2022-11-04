@@ -36,16 +36,19 @@ using namespace std;
 
 namespace gkfs::path {
 
+// 是否为相对路径
 bool
 is_relative(const string& path) {
     return (!path.empty()) && (path.front() != separator);
 }
 
+// 是否为绝对路径
 bool
 is_absolute(const string& path) {
     return (!path.empty()) && (path.front() == separator);
 }
 
+// 是否有末尾斜杠
 bool
 has_trailing_slash(const string& path) {
     return (!path.empty()) && (path.back() == separator);
@@ -59,6 +62,7 @@ has_trailing_slash(const string& path) {
  * This would return the same of:
  * ```
  * string(raw_path).append(prefix_path);
+ * 写反了
  * ```
  * But it is faster because it avoids to copy the `raw_path` twice.
  *
@@ -70,6 +74,7 @@ has_trailing_slash(const string& path) {
  * prepend_path("/tmp/prefix", "./my/path") == "/tmp/prefix/./my/path"
  * ```
  */
+// 前缀路径组合
 string
 prepend_path(const string& prefix_path, const char* raw_path) {
     assert(!has_trailing_slash(prefix_path));
@@ -89,6 +94,7 @@ prepend_path(const string& prefix_path, const char* raw_path) {
  * Example:
  *  split_path("/first/second/third") == ["first", "second", "third"]
  */
+// 分隔路径
 ::vector<string>
 split_path(const string& path) {
     ::vector<string> tokens;
@@ -114,6 +120,7 @@ split_path(const string& path) {
  * constructed relative path.
  */
 string
+绝对转相对
 absolute_to_relative(const string& root_path, const string& absolute_path) {
     assert(is_absolute(root_path));
     assert(is_absolute(absolute_path));
@@ -153,6 +160,7 @@ absolute_to_relative(const string& root_path, const string& absolute_path) {
 
 /**
  * returns the directory name for given path
+ * // 其实可以理解成返回父目录的路径
  * @param path
  * @return
  */

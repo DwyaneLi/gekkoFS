@@ -40,7 +40,7 @@
 
 extern "C" {
 #include <dirent.h> // used for file types in the getdents{,64}() functions
-#include <linux/kernel.h> // used for definition of alignment macros
+#include <linux/kernel.h> // used for definition of alignment macros // 用于定义对齐宏
 #include <sys/statfs.h>
 #include <sys/statvfs.h>
 }
@@ -92,6 +92,9 @@ namespace {
 /**
  * Checks if metadata for parent directory exists (can be disabled with
  * CREATE_CHECK_PARENTS). errno may be set
+ * // 检查父目录的元数据是否存在(可以使用CREATE_CHECK_PARENTS禁用)。
+ * // Errno可以设置
+ * // 打开就是加到file_map里
  * @param path
  * @return 0 on success, -1 on failure
  */
@@ -123,6 +126,7 @@ namespace gkfs::syscall {
 
 /**
  * gkfs wrapper for open() system calls
+ * // 封装的打开
  * errno may be set
  * @param path
  * @param mode
@@ -144,7 +148,12 @@ gkfs_open(const std::string& path, mode_t mode, int flags) {
         return -1;
     }
     // metadata object filled during create or stat
+    // 在创建或统计期间填充的元数据对象
     gkfs::metadata::Metadata md{};
+    // O_CREAT: 文件存在则使用，不存在则新建
+    // O_EXCL：检查文件是否存在，不存在则新建，存在则返回错误信息
+    // O_CREAT 若此文件不存在则创建它。使用此选项时需要提供第三个参数mode,表示该文件的访问权限。
+    // O_EXCL 如果同时指定了O_CREAT,并且文件已存在,则出错返回。
     if(flags & O_CREAT) {
         if(flags & O_DIRECTORY) {
             LOG(ERROR, "O_DIRECTORY use with O_CREAT. NOT SUPPORTED");
@@ -153,7 +162,9 @@ gkfs_open(const std::string& path, mode_t mode, int flags) {
         }
         // no access check required here. If one is using our FS they have the
         // permissions.
+        // 没有设置访问权限,gkfs不需要
         auto err = gkfs_create(path, mode | S_IFREG);
+        // 用gkfs_create来判断文件是否存在
         if(err) {
             if(errno == EEXIST) {
                 // file exists, O_CREAT was set
@@ -177,6 +188,7 @@ gkfs_open(const std::string& path, mode_t mode, int flags) {
             }
         } else {
             // file was successfully created. Add to filemap
+            // 新创建的直接加入到filemap里返回就可以
             return CTX->file_map()->add(
                     std::make_shared<gkfs::filemap::OpenFile>(path, flags));
         }
@@ -203,11 +215,12 @@ gkfs_open(const std::string& path, mode_t mode, int flags) {
     }
 #endif
 
+    // 如果是目录，则打开目录
     if(S_ISDIR(md.mode())) {
         return gkfs_opendir(path);
     }
 
-
+    // 对于之前就已经存在的普通文件的处理
     /*** Regular file exists ***/
     assert(S_ISREG(md.mode()));
 
@@ -233,6 +246,7 @@ int
 gkfs_create(const std::string& path, mode_t mode) {
 
     // file type must be set
+    // 只支持文件和目录
     switch(mode & S_IFMT) {
         case 0:
             mode |= S_IFREG;
@@ -252,7 +266,7 @@ gkfs_create(const std::string& path, mode_t mode) {
             errno = EINVAL;
             return -1;
     }
-
+    // 父目录不存在就失败
     if(check_parent_dir(path)) {
         return -1;
     }
@@ -266,6 +280,7 @@ gkfs_create(const std::string& path, mode_t mode) {
 
 /**
  * gkfs wrapper for unlink() system calls
+ * // 删除文件，不能删除目录
  * errno may be set
  * @param path
  * @return 0 on success, -1 on failure
@@ -293,6 +308,7 @@ gkfs_remove(const std::string& path) {
 
 /**
  * gkfs wrapper for access() system calls
+ * // 检查函数是否可读写
  * errno may be set
  * @param path
  * @param mask
@@ -381,6 +397,7 @@ gkfs_statx(int dirfs, const std::string& path, int flags, unsigned int mask,
 
 /**
  * gkfs wrapper for statfs() system calls
+ * // 查看文件系统的信息，保存在buf里
  * errno may be set
  * @param buf
  * @return 0 on success, -1 on failure
@@ -450,8 +467,9 @@ gkfs_statvfs(struct statvfs* buf) {
 /**
  * gkfs wrapper for lseek() system calls with available file descriptor
  * errno may be set
- * @param fd
- * @param offset
+ * // 使用 lseek 函数可以改变文件的 cfo 
+ * @param fd 文件描述符
+ * @param offset 根据参数whence确定
  * @param whence
  * @return 0 on success, -1 on failure
  */
@@ -472,6 +490,7 @@ off_t
 gkfs_lseek(shared_ptr<gkfs::filemap::OpenFile> gkfs_fd, off_t offset,
            unsigned int whence) {
     switch(whence) {
+        // 文件偏移量被设置成offset
         case SEEK_SET:
             if(offset < 0) {
                 errno = EINVAL;
@@ -479,9 +498,11 @@ gkfs_lseek(shared_ptr<gkfs::filemap::OpenFile> gkfs_fd, off_t offset,
             }
             gkfs_fd->pos(offset);
             break;
+        // 文件偏移量+=offset
         case SEEK_CUR:
             gkfs_fd->pos(gkfs_fd->pos() + offset);
             break;
+        // 文件偏移量将被设置为文件长度加上 offset，offset 可以为正也可以为负。
         case SEEK_END: {
             auto ret = gkfs::rpc::forward_get_metadentry_size(gkfs_fd->path());
             auto err = ret.first;
@@ -518,6 +539,7 @@ gkfs_lseek(shared_ptr<gkfs::filemap::OpenFile> gkfs_fd, off_t offset,
 
 /**
  * wrapper function for gkfs_truncate
+ * // 截断
  * errno may be set
  * @param path
  * @param old_size
@@ -532,13 +554,14 @@ gkfs_truncate(const std::string& path, off_t old_size, off_t new_size) {
     if(new_size == old_size) {
         return 0;
     }
+    // 先修改metadata
     auto err = gkfs::rpc::forward_decr_size(path, new_size);
     if(err) {
         LOG(DEBUG, "Failed to decrease size");
         errno = err;
         return -1;
     }
-
+    // 再截断
     err = gkfs::rpc::forward_truncate(path, old_size, new_size);
     if(err) {
         LOG(DEBUG, "Failed to truncate data");
@@ -588,6 +611,7 @@ gkfs_truncate(const std::string& path, off_t length) {
 /**
  * gkfs wrapper for dup() system calls
  * errno may be set
+ * // 复制一个现存的文件描述符
  * @param oldfd
  * @return file descriptor int or -1 on error
  */
@@ -599,6 +623,7 @@ gkfs_dup(const int oldfd) {
 /**
  * gkfs wrapper for dup2() system calls
  * errno may be set
+ * // 复制一个现存的文件描述符
  * @param oldfd
  * @param newfd
  * @return file descriptor int or -1 on error
@@ -612,9 +637,9 @@ gkfs_dup2(const int oldfd, const int newfd) {
  * Wrapper function for all gkfs write operations
  * errno may be set
  * @param file
- * @param buf
- * @param count
- * @param offset
+ * @param buf 缓冲区
+ * @param count 写入大小
+ * @param offset 偏移
  * @return written size or -1 on error
  */
 ssize_t
@@ -652,6 +677,7 @@ gkfs_pwrite(std::shared_ptr<gkfs::filemap::OpenFile> file, const char* buf,
 
 /**
  * gkfs wrapper for pwrite() system calls
+ * // 对pwrite的封装，pwrite是通过path，ws是通过fd
  * errno may be set
  * @param fd
  * @param buf
@@ -667,6 +693,7 @@ gkfs_pwrite_ws(int fd, const void* buf, size_t count, off64_t offset) {
 
 /**
  * gkfs wrapper for write() system calls
+ * //在当前pos后写， 也可能是追加写
  * errno may be set
  * @param fd
  * @param buf
@@ -690,10 +717,11 @@ gkfs_write(int fd, const void* buf, size_t count) {
 
 /**
  * gkfs wrapper for pwritev() system calls
+ * // 将多个缓冲区的数据写在一起
  * errno may be set
  * @param fd
- * @param iov
- * @param iovcnt
+ * @param iov 
+ * @param iovcnt 要写的部分的数量，就是一共有几个部分
  * @param offset
  * @return written size or -1 on error
  */
@@ -770,6 +798,7 @@ gkfs_pread(std::shared_ptr<gkfs::filemap::OpenFile> file, char* buf,
 
     // Zeroing buffer before read is only relevant for sparse files. Otherwise
     // sparse regions contain invalid data.
+    // 清空缓冲区并且分配空间
     if constexpr(gkfs::config::io::zero_buffer_before_read) {
         memset(buf, 0, sizeof(char) * count);
     }
@@ -798,6 +827,7 @@ gkfs_read(int fd, void* buf, size_t count) {
     auto pos = gkfs_fd->pos(); // retrieve the current offset
     auto ret = gkfs_pread(gkfs_fd, reinterpret_cast<char*>(buf), count, pos);
     // Update offset in file descriptor in the file map
+    // 读完之后要更新pos
     if(ret > 0) {
         gkfs_fd->pos(pos + ret);
     }
@@ -883,6 +913,7 @@ gkfs_pread_ws(int fd, void* buf, size_t count, off64_t offset) {
 
 /**
  * wrapper function for opening directories
+ * // 打开目录
  * errno may be set
  * @param path
  * @return 0 on success or -1 on error
@@ -912,6 +943,7 @@ gkfs_opendir(const std::string& path) {
 
 /**
  * gkfs wrapper for rmdir() system calls
+ * // 删除目录
  * errno may be set
  * @param path
  * @return 0 on success or -1 on error
@@ -937,6 +969,7 @@ gkfs_rmdir(const std::string& path) {
     }
     assert(ret.second);
     auto open_dir = ret.second;
+    // 目录里有东西就不能删，必须是空目录
     if(open_dir->size() != 0) {
         errno = ENOTEMPTY;
         return -1;
@@ -951,11 +984,12 @@ gkfs_rmdir(const std::string& path) {
 
 /**
  * gkfs wrapper for getdents() system calls
+ * // 获取目录项
  * errno may be set
  * @param fd
- * @param dirp
- * @param count
- * @return 0 on success or -1 on error
+ * @param dirp // 一篇缓冲区用来记录目录项的信息
+ * @param count  目录信息的大小
+ * @return 0 on success or -1 on error 这个应该是是错的，written > 0就是success
  */
 int
 gkfs_getdents(unsigned int fd, struct linux_dirent* dirp, unsigned int count) {

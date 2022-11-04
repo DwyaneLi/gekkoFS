@@ -38,6 +38,7 @@ namespace gkfs {
 namespace filemap {
 class OpenDir;
 }
+
 namespace metadata {
 struct MetadentryUpdateFlags;
 

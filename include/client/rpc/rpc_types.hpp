@@ -365,6 +365,7 @@ struct stat {
     class output;
 
     // traits used so that the engine knows what to do with the RPC
+    // 下面的信息可以帮助RPC了解怎么处理他们
     using self_type = stat;
     using handle_type = hermes::rpc_handle<self_type>;
     using input_type = input;
@@ -375,9 +376,12 @@ struct stat {
     // RPC public identifier
     // (N.B: we reuse the same IDs assigned by Margo so that the daemon
     // understands Hermes RPCs)
+    // RPC公共标识
+    // (N.B:我们重用由Margo分配的相同id，以便守护进程理解Hermes rpc)
     constexpr static const uint64_t public_id = 1396244480;
 
     // RPC internal Mercury identifier
+    // RPC内部Mercury标识符
     constexpr static const hg_id_t mercury_id = public_id;
 
     // RPC name

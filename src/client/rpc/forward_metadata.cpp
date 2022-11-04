@@ -65,6 +65,7 @@ forward_create(const std::string& path, const mode_t mode) {
         // TODO(amiranda): hermes will eventually provide a post(endpoint)
         // returning one result and a broadcast(endpoint_set) returning a
         // result_set. When that happens we can remove the .at(0) :/
+        // 这里不像对数据的操作一样，插入handle队列中，而是直接调用
         auto out = ld_network_service->post<gkfs::rpc::create>(endp, path, mode)
                            .get()
                            .at(0);
@@ -79,6 +80,7 @@ forward_create(const std::string& path, const mode_t mode) {
 
 /**
  * Send an RPC for a stat request
+ * // 返回的信息存放在attr中
  * @param path
  * @param attr
  * @return error code
@@ -117,7 +119,9 @@ forward_stat(const std::string& path, string& attr) {
  * small files (file_size / chunk_size) < number_of_daemons where no broadcast
  * to all daemons is used to remove all chunks. Otherwise, a broadcast to all
  * daemons is used.
- *
+ * // 为删除请求发送一个RPC。这将删除元数据和所有可能分布在多个守护进程中的数据块。
+ * // 对小文件(file_size / chunk_size) < number_of_daemons进行了优化，其中不使用
+ * // 广播到所有daemons来删除所有块。否则，将向所有守护进程广播。
  * This function only attempts data removal if data exists (determined when
  * metadata is removed)
  * @param path
@@ -134,6 +138,7 @@ forward_remove(const std::string& path) {
      * Send one RPC to metadata destination and remove metadata while retrieving
      * size and mode to determine if data needs to removed too
      */
+    //  删除metadata
     try {
         LOG(DEBUG, "Sending RPC ...");
         // TODO(amiranda): add a post() with RPC_TIMEOUT to hermes so that we
@@ -150,6 +155,7 @@ forward_remove(const std::string& path) {
 
         if(out.err())
             return out.err();
+        // 获取文件数据的大小和mode
         size = out.size();
         mode = out.mode();
     } catch(const std::exception& ex) {
@@ -158,6 +164,7 @@ forward_remove(const std::string& path) {
     }
     // if file is not a regular file and it's size is 0, data does not need to
     // be removed, thus, we exit
+    // 如果文件数据量为0，直接退出，不要删了。
     if(!(S_ISREG(mode) && (size != 0)))
         return 0;
 
@@ -173,7 +180,8 @@ forward_remove(const std::string& path) {
 
         try {
             LOG(DEBUG, "Sending RPC to host: {}", endp_metadata.to_string());
-            gkfs::rpc::remove_data::input in(path);
+            gkfs::rpc::remove_data::input in(path); 
+            // 删和metadata处的数据，为啥不放在下面一起删？
             handles.emplace_back(
                     ld_network_service->post<gkfs::rpc::remove_data>(
                             endp_metadata, in));
@@ -207,6 +215,7 @@ forward_remove(const std::string& path) {
             return EBUSY;
         }
     } else { // "Big" files
+        // 大文件对所有host广播，因为每个结点都可能有文件块
         for(const auto& endp : CTX->hosts()) {
             try {
                 LOG(DEBUG, "Sending RPC to host: {}", endp.to_string());
@@ -258,6 +267,7 @@ forward_remove(const std::string& path) {
 /**
  * Send an RPC for a decrement file size request. This is for example used
  * during a truncate() call.
+ * // 因为阶段不仅要处理数据，也要处理metadata，处理数据的在forward_data里
  * @param path
  * @param length
  * @return error code
@@ -291,6 +301,7 @@ forward_decr_size(const std::string& path, size_t length) {
 
 /**
  * Send an RPC for an update metadentry request.
+ * // 更新metadata dentry
  * NOTE: Currently unused.
  * @param path
  * @param md
@@ -344,6 +355,7 @@ forward_update_metadentry(
 /**
  * Send an RPC request for an update to the file size.
  * This is called during a write() call or similar
+ * // 更新文件大小，在wirte的时候调用
  * @param path
  * @param size
  * @param offset
@@ -384,6 +396,7 @@ forward_update_metadentry_size(const string& path, const size_t size,
 /**
  * Send an RPC request to get the current file size.
  * This is called during a lseek() call
+ * // 发送RPC请求以获取当前文件大小。这是在lseek()调用期间调用的
  * @param path
  * @return pair<error code, file size>
  */
@@ -418,6 +431,7 @@ forward_get_metadentry_size(const std::string& path) {
 
 /**
  * Send an RPC request to receive all entries of a directory.
+ * // 发送RPC请求以接收目录的所有条目。
  * @param open_dir
  * @return error code
  */
@@ -443,6 +457,7 @@ forward_get_dirents(const string& path) {
 
     // expose local buffers for RMA from servers
     std::vector<hermes::exposed_memory> exposed_buffers;
+    // 内存分配
     exposed_buffers.reserve(targets.size());
 
     for(std::size_t i = 0; i < targets.size(); ++i) {
@@ -524,6 +539,7 @@ forward_get_dirents(const string& path) {
         // each server wrote information to its pre-defined region in
         // large_buffer, recover it by computing the base_address for each
         // particular server and adding the appropriate offsets
+        // 每个服务器将信息写入其在large_buffer中预定义的区域，通过计算每个特定服务器的base_address并添加适当的偏移量来恢复信息
         assert(exposed_buffers[i].count() == 1);
         void* base_ptr = exposed_buffers[i].begin()->data();
 
@@ -567,6 +583,8 @@ forward_get_dirents(const string& path) {
  * reusing the forward_get_dirents code. As we only need a server, we could
  * simplify the code removing the asynchronous part.
  */
+// 返回一个具有path-isdir-size和ctime的元组
+// 和上一个函数差不多，只不过是对单一服务器来说
 pair<int, vector<tuple<const std::string, bool, size_t, time_t>>>
 forward_get_dirents_single(const string& path, int server) {
 
@@ -584,6 +602,7 @@ forward_get_dirents_single(const string& path, int server) {
             new char[gkfs::config::rpc::dirents_buff_size]);
 
     // We use the full size per server...
+    // 用最大的size对每一个服务器
     const std::size_t per_host_buff_size = gkfs::config::rpc::dirents_buff_size;
     vector<tuple<const std::string, bool, size_t, time_t>> output;
 
@@ -654,6 +673,7 @@ forward_get_dirents_single(const string& path, int server) {
 
     // The parenthesis is extremely important if not the cast will add as a
     // size_t or a time_t and not as a char
+    // 将读取的信息回复，并且返回
     auto out_buff_ptr = static_cast<char*>(exposed_buffers[0].begin()->data());
     auto bool_ptr = reinterpret_cast<bool*>(out_buff_ptr);
     auto size_ptr = reinterpret_cast<size_t*>(
@@ -689,6 +709,7 @@ forward_get_dirents_single(const string& path, int server) {
 
 /**
  * Send an RPC request to create a symlink.
+ * // 发送一个RPC请求来创建一个符号链接。
  * @param path
  * @param target_path
  * @return error code

@@ -45,7 +45,9 @@ extern "C" {
 #include <sys/stat.h>
 #include <sys/statfs.h>
 }
-
+// hook其实就是判断是不是在挂载目录下然后根据路径做相应的处理
+// 本地的就用本地的
+// gekkofs挂载目录下的就用gekkofs的
 namespace {
 
 // TODO replace all internal gkfs errno variable usage with LEAF
@@ -56,6 +58,7 @@ with_errno(int ret) {
 
 } // namespace
 
+// 不被拦截的syscall的封装
 template <class... Args>
 inline long
 syscall_no_intercept_wrapper(long syscall_number, Args... args) {
@@ -71,6 +74,7 @@ syscall_no_intercept_wrapper(long syscall_number, Args... args) {
 
 namespace gkfs::hook {
 
+// open
 int
 hook_openat(int dirfd, const char* cpath, int flags, mode_t mode) {
 
@@ -119,6 +123,15 @@ hook_close(int fd) {
     return syscall_no_intercept_wrapper(SYS_close, fd);
 }
 
+//lxl
+/*
+* fstat区别于另外两个系统调用的地方在于，fstat系统调用接受的是 一个“文件描述符”，而另外两个则直接接受“文件全路径”。
+* 文件描述符是需要我们用open系统调用后才能得到的，而文件全路经直接写就可以了。
+* stat和lstat的区别：当文件是一个符号链接时，lstat返回的是该符号链接本身的信息；而stat返回的是该链接指向的文件的信息。
+*（似乎有些晕吧，这样记，lstat比stat多了一个l，因此它是有本事处理符号链接文件的，因此当遇到符号链接文件时，lstat当然不会放过。
+* 而 stat系统调用没有这个本事，它只能对符号链接文件睁一只眼闭一只眼，直接去处理链接所指文件喽）
+*/
+// 但是在下面的代码来看，好像gekkofs的没区别都是stat
 int
 hook_stat(const char* path, struct stat* buf) {
 

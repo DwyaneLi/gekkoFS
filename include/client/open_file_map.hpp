@@ -35,7 +35,7 @@
 #include <memory>
 #include <atomic>
 #include <array>
-
+// openfile 里的路径全都是相对于挂载目录的路径
 namespace gkfs::filemap {
 
 /* Forward declaration */
@@ -46,11 +46,11 @@ enum class OpenFile_flags {
     append = 0,
     creat,
     trunc,
-    rdonly,
-    wronly,
-    rdwr,
-    cloexec,
-    flag_count // this is purely used as a size variable of this enum class
+    rdonly, // 只读
+    wronly, // 只写
+    rdwr,   // 可读可写
+    cloexec, // close on excel
+    flag_count // this is purely used as a size variable of this enum class // 用于统计数量的
 };
 
 enum class FileType { regular, directory };
@@ -62,6 +62,7 @@ protected:
     std::array<bool, static_cast<int>(OpenFile_flags::flag_count)> flags_ = {
             {false}};
     unsigned long pos_;
+    // 互斥锁
     std::mutex pos_mutex_;
     std::mutex flag_mutex_;
 
@@ -101,7 +102,7 @@ public:
 class OpenFileMap {
 
 private:
-    std::map<int, std::shared_ptr<OpenFile>> files_;
+    std::map<int, std::shared_ptr<OpenFile>> files_; // 前面的int应该就是文件描述符
     std::recursive_mutex files_mutex_;
 
     int
@@ -119,7 +120,14 @@ private:
      * are reused, unlike to ours. The only case where we will clash with the
      * kernel is, if one process has more than 100000 files open at the same
      * time.
+     * TODO:将文件描述符索引设置为特定值是危险的，因为可能会与内核发生冲突。例如，
+     * 如果我们是传递而不是拦截，并且内核分配了一个文件描述符，但我们稍后将使用相
+     * 同的fd值，那么我们将拦截本该到达内核的调用。反过来也一样。为了缓解这个问题，
+     * 我们将初始fd数设置为一个较高的值。我们“希望”我们不会发生冲突，但这不是永久
+     * 的解决方案。注意:这个解决方案可能已经在很多情况下很好地工作了，因为内核fd值
+     * 是重用的，不像我们的。惟一会与内核发生冲突的情况是，一个进程同时打开的文件超过100000个。
      */
+
     int fd_idx;
     std::mutex fd_idx_mutex;
     std::atomic<bool> fd_validation_needed;

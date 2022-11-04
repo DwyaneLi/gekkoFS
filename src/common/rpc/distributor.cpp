@@ -34,6 +34,7 @@ namespace gkfs {
 
 namespace rpc {
 
+// 初始化
 SimpleHashDistributor::SimpleHashDistributor(host_t localhost,
                                              unsigned int hosts_size)
     : localhost_(localhost), hosts_size_(hosts_size), all_hosts_(hosts_size) {
@@ -42,11 +43,13 @@ SimpleHashDistributor::SimpleHashDistributor(host_t localhost,
 
 SimpleHashDistributor::SimpleHashDistributor() {}
 
+// get local host
 host_t
 SimpleHashDistributor::localhost() const {
     return localhost_;
 }
 
+// 简单哈希算法定位位置 路径+chunk_id定位 （host）
 host_t
 SimpleHashDistributor::locate_data(const string& path,
                                    const chunkid_t& chnk_id) const {
@@ -56,6 +59,7 @@ SimpleHashDistributor::locate_data(const string& path,
 host_t
 SimpleHashDistributor::locate_data(const string& path, const chunkid_t& chnk_id,
                                    unsigned int hosts_size) {
+    // 相当于初始化赋值
     if(hosts_size_ != hosts_size) {
         hosts_size_ = hosts_size;
         all_hosts_ = std::vector<unsigned int>(hosts_size);
@@ -126,6 +130,7 @@ ForwarderDistributor::locate_directory_metadata(const std::string& path) const {
     return all_hosts_;
 }
 
+// 暂时理解为增加块，然后add的操作就是要合并连续的
 void
 IntervalSet::Add(chunkid_t smaller, chunkid_t bigger) {
     const auto next = _intervals.upper_bound(smaller);
@@ -143,6 +148,7 @@ IntervalSet::Add(chunkid_t smaller, chunkid_t bigger) {
     _intervals[smaller] = bigger;
 }
 
+//判断在不在间隔内
 bool
 IntervalSet::IsInsideInterval(unsigned int v) const {
     const auto suspectNext = _intervals.upper_bound(v);

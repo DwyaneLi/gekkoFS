@@ -39,26 +39,26 @@ constexpr unsigned int max_length = 4096; // 4k chars
 constexpr char separator = '/'; // PATH SEPARATOR
 
 bool
-is_relative(const std::string& path);
+is_relative(const std::string& path); // 是否为相对路径
 
 bool
-is_absolute(const std::string& path);
+is_absolute(const std::string& path); // 是否为绝对路径
 
 bool
-has_trailing_slash(const std::string& path);
+has_trailing_slash(const std::string& path);// 是否有末尾斜杠
 
 std::string
-prepend_path(const std::string& path, const char* raw_path);
+prepend_path(const std::string& path, const char* raw_path); // 前缀路径组合
 
 std::string
 absolute_to_relative(const std::string& root_path,
-                     const std::string& absolute_path); // unused ATM
+                     const std::string& absolute_path); // unused ATM 绝对转相对
 
 std::string
-dirname(const std::string& path);
+dirname(const std::string& path); //返回目录名的完全路径
 
 std::vector<std::string>
-split_path(const std::string& path);
+split_path(const std::string& path); // 分隔路径
 
 } // namespace gkfs::path
 

@@ -55,8 +55,9 @@ namespace {
  * If the object already exists, the RPC output struct includes an EEXIST error
  * code. This is not a hard error. Other unexpected errors are placed in the
  * output struct as well.
- *
+ * // 更新KV store（rockdb）的条目，如果当前条目已经存在，就返回一个错误。
  * All exceptions must be caught here and dealt with accordingly.
+ * // 所有的异常都要在这里发现并且捕获
  * @endinteral
  * @param handle Mercury RPC handle
  * @return Mercury error code to Mercury
@@ -880,7 +881,7 @@ rpc_srv_mk_symlink(hg_handle_t handle) {
 #endif
 
 } // namespace
-
+// 将Margo RPC和GKFS的处理函数关联
 DEFINE_MARGO_RPC_HANDLER(rpc_srv_create)
 
 DEFINE_MARGO_RPC_HANDLER(rpc_srv_stat)

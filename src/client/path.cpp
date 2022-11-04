@@ -65,6 +65,7 @@ static const string excluded_paths[2] = {"sys/", "proc/"};
  * "head", "no"]) == 2; tot_comp == 4;
  * ```
  */
+// components匹配，返回匹配数
 unsigned int
 match_components(const string& path, unsigned int& path_components,
                  const ::vector<string>& components) {
@@ -107,6 +108,8 @@ match_components(const string& path, unsigned int& path_components,
  * returns true if the resolved path fall inside GekkoFS namespace,
  * and false otherwise.
  */
+// 将path的规范形式填充到resolved里，如果是gekkofs里的返回true
+// 所谓规范就是去除了挂载路径，也就是相对于挂载路径的路径
 bool
 resolve(const string& path, string& resolved, bool resolve_last_link) {
 
@@ -114,7 +117,7 @@ resolve(const string& path, string& resolved, bool resolve_last_link) {
         resolved, resolve_last_link);
 
     assert(path::is_absolute(path));
-
+    // 在sys和在proc下的不是gekkofs
     for(auto& excl_path : excluded_paths) {
         if(path.compare(1, excl_path.length(), excl_path) == 0) {
             LOG(DEBUG, "Skipping: '{}'", path);
@@ -124,16 +127,17 @@ resolve(const string& path, string& resolved, bool resolve_last_link) {
     }
 
     struct stat st {};
+    // 挂载了文件系统的目录
     const ::vector<string>& mnt_components = CTX->mountdir_components();
     unsigned int matched_components =
-            0; // matched number of component in mountdir
-    unsigned int resolved_components = 0;
-    string::size_type comp_size = 0; // size of current component
-    string::size_type start = 0;     // start index of curr component
+            0; // matched number of component in mountdir 与挂载目录匹配的组件数
+    unsigned int resolved_components = 0; //resolved 中components的数量
+    string::size_type comp_size = 0; // size of current component 现在的组件的长度
+    string::size_type start = 0;     // start index of curr component 现在的组件的起始index
     string::size_type end = 0; // end index of curr component (last processed
-                               // Path Separator "separator")
+                               // Path Separator "separator") curr成分的结束索引(最后处理的路径分隔符" Separator ")
     string::size_type last_slash_pos =
-            0; // index of last slash in resolved path
+            0; // index of last slash in resolved path 已解析路径中最后一个斜杠的索引
     resolved.clear();
     resolved.reserve(path.size());
 
@@ -141,6 +145,7 @@ resolve(const string& path, string& resolved, bool resolve_last_link) {
         start = end;
 
         /* Skip sequence of multiple path-separators. */
+        // 跳过多个路径分隔符的序列。
         while(start < path.size() && path[start] == path::separator) {
             ++start;
         }
@@ -187,11 +192,13 @@ resolve(const string& path, string& resolved, bool resolve_last_link) {
 
         if(matched_components < mnt_components.size()) {
             // Outside GekkoFS
+            // 这个component匹配成功
             if(matched_components == resolved_components &&
                path.compare(start, comp_size,
                             mnt_components.at(matched_components)) == 0) {
                 ++matched_components;
             }
+            // 路径不存在
             if(lstat(resolved.c_str(), &st) < 0) {
 
                 LOG(DEBUG, "path \"{}\" does not exist", resolved);
@@ -222,6 +229,7 @@ resolve(const string& path, string& resolved, bool resolve_last_link) {
                 last_slash_pos = resolved.find_last_of(path::separator);
                 continue;
             } else if((!S_ISDIR(st.st_mode)) && (end != path.size())) {
+                // 不是目录，是文件且长度不对，则退出
                 resolved.append(path, end, string::npos);
                 return false;
             }
@@ -245,6 +253,7 @@ resolve(const string& path, string& resolved, bool resolve_last_link) {
     return false;
 }
 
+// 查看当前路径
 string
 get_sys_cwd() {
     char temp[path::max_length];
@@ -260,6 +269,7 @@ get_sys_cwd() {
     return {temp};
 }
 
+// 切换当前工作路径
 void
 set_sys_cwd(const string& path) {
 
@@ -273,6 +283,7 @@ set_sys_cwd(const string& path) {
     }
 }
 
+// 将环境变量LIBDKFS_CWD设置为path
 void
 set_env_cwd(const string& path) {
 
@@ -302,6 +313,7 @@ unset_env_cwd() {
     }
 }
 
+// 初始化cwd，如果已经设置了env_cwd,env_cwd就是cwd，不然就是sys_cwd
 void
 init_cwd() {
     const char* env_cwd = ::getenv(gkfs::env::CWD);
@@ -312,6 +324,7 @@ init_cwd() {
     }
 }
 
+// 设置cwd，cwd会被设置成path
 void
 set_cwd(const string& path, bool internal) {
     if(internal) {
@@ -321,6 +334,7 @@ set_cwd(const string& path, bool internal) {
         set_sys_cwd(path);
         unset_env_cwd();
     }
+    // 上面的设置在下次init_cwd的时候使用，下次init之后，cwd仍是path，internal用来区别是否设置环境变量
     CTX->cwd(path);
 }
 

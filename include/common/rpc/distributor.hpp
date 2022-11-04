@@ -36,7 +36,7 @@
 #include <unordered_map>
 #include <fstream>
 #include <map>
-
+// 这一部分和hash有关 distribute分散
 namespace gkfs::rpc {
 
 using chunkid_t = unsigned int;
@@ -44,6 +44,7 @@ using host_t = unsigned int;
 
 class Distributor {
 public:
+    // 下面这些函数用于定位数据和metadata
     virtual host_t
     localhost() const = 0;
 
@@ -51,6 +52,7 @@ public:
     locate_data(const std::string& path, const chunkid_t& chnk_id) const = 0;
     // TODO: We need to pass hosts_size in the server side, because the number
     // of servers are not defined (in startup)
+    // 启动的时候需要用这个函数定位，因为一开始并没有传递host_size,这个参数host_size会更新成员变量
     virtual host_t
     locate_data(const std::string& path, const chunkid_t& chnk_id,
                 unsigned int hosts_size) = 0;
@@ -65,9 +67,9 @@ public:
 
 class SimpleHashDistributor : public Distributor {
 private:
-    host_t localhost_;
-    unsigned int hosts_size_{0};
-    std::vector<host_t> all_hosts_;
+    host_t localhost_; // 本地主机
+    unsigned int hosts_size_{0}; // 主机数量
+    std::vector<host_t> all_hosts_; // 所有主机
     std::hash<std::string> str_hash;
 
 public:
@@ -89,10 +91,12 @@ public:
     host_t
     locate_file_metadata(const std::string& path) const override;
 
+    // ？？？ 为什么对于目录元数据就是返回所有host？
     std::vector<host_t>
     locate_directory_metadata(const std::string& path) const override;
 };
 
+// 本地唯一的结点，自然所有数据都在本地
 class LocalOnlyDistributor : public Distributor {
 private:
     host_t localhost_;
@@ -114,6 +118,7 @@ public:
     locate_directory_metadata(const std::string& path) const override;
 };
 
+// 数据在本节点， 元数据哈希？ 和server有关？
 class ForwarderDistributor : public Distributor {
 private:
     host_t fwd_host_;
@@ -138,6 +143,7 @@ public:
     locate_directory_metadata(const std::string& path) const override;
 };
 
+// 块区间？
 /*
  * Class IntervalSet
  * FROM
@@ -152,14 +158,19 @@ public:
     IsInsideInterval(unsigned int) const;
 };
 
+// 我感觉这个有点类似于导航了
 class GuidedDistributor : public Distributor {
 private:
     host_t localhost_;
     unsigned int hosts_size_{0};
     std::vector<host_t> all_hosts_;
     std::hash<std::string> str_hash;
+    // 最主要的数据结构
+    // string：文件路径
+    // map_interval: key：IntervalSet 文件对应的chunk块  value: 所在结点号
     std::unordered_map<std::string, std::pair<IntervalSet, unsigned int>>
             map_interval;
+    // 记录了一些前缀（也可以理解成目录？）
     std::vector<std::string> prefix_list; // Should not be very long
     bool
     init_guided();

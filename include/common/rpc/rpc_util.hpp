@@ -38,9 +38,11 @@ extern "C" {
 
 namespace gkfs::rpc {
 
+// 将布尔变量转变成mercury中的hg_bool_t
 hg_bool_t
 bool_to_merc_bool(bool state);
 
+// 返回本地的hostname
 std::string
 get_my_hostname(bool short_hostname = false);
 

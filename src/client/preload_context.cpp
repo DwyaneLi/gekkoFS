@@ -100,6 +100,7 @@ PreloadContext::init_logging() {
     );
 }
 
+// 设置挂载路径
 void
 PreloadContext::mountdir(const std::string& path) {
     assert(gkfs::path::is_absolute(path));
@@ -183,6 +184,11 @@ PreloadContext::auto_sm(bool auto_sm) {
     PreloadContext::auto_sm_ = auto_sm;
 }
 
+// lxl
+// 判断一个文件的状态，是否在管理的目录内
+// 并且填充relative_path 也就是相对于挂载路径的路径
+// 第一个参数众所周知是一个文件描述符, 该参数若使用标志AT_FDCWD, 则pathname参数使用的是相对路径,
+// 如果pathname是一个绝对路径, 则忽略fd参数, 
 RelativizeStatus
 PreloadContext::relativize_fd_path(int dirfd, const char* raw_path,
                                    std::string& relative_path, int flags,
@@ -190,6 +196,7 @@ PreloadContext::relativize_fd_path(int dirfd, const char* raw_path,
 
     // Relativize path should be called only after the library constructor has
     // been executed
+    // 库构造函数调用后才可以执行
     assert(interception_enabled_);
     // If we run the constructor we also already setup the mountdir
     assert(!mountdir_.empty());
@@ -203,9 +210,11 @@ PreloadContext::relativize_fd_path(int dirfd, const char* raw_path,
         // path is relative
         if(dirfd == AT_FDCWD) {
             // path is relative to cwd
+            // 在当前工作目录下
             path = gkfs::path::prepend_path(cwd_, raw_path);
         } else {
             if(!ofm_->exist(dirfd)) {
+                // 不存在该目录
                 return RelativizeStatus::fd_unknown;
             } else {
                 // check if we have the AT_EMPTY_PATH flag
@@ -226,6 +235,7 @@ PreloadContext::relativize_fd_path(int dirfd, const char* raw_path,
             path.append(raw_path);
         }
     } else {
+        // raw_path 是绝对路径
         path = raw_path;
     }
 
@@ -235,6 +245,7 @@ PreloadContext::relativize_fd_path(int dirfd, const char* raw_path,
     return RelativizeStatus::external;
 }
 
+// 和上面那个差不多，也就是默认dirfd是cwd
 bool
 PreloadContext::relativize_path(const char* raw_path,
                                 std::string& relative_path,
@@ -297,6 +308,7 @@ PreloadContext::interception_enabled() const {
     return interception_enabled_;
 }
 
+//lxl：将fd注册，如果internal_fds_must_relocate_为true的话，则要将fd重新变成另一个值
 int
 PreloadContext::register_internal_fd(int fd) {
 
@@ -379,6 +391,7 @@ PreloadContext::unregister_internal_fd(int fd) {
     internal_fds_.set(pos);
 }
 
+// 判断是否注册
 bool
 PreloadContext::is_internal_fd(int fd) const {
 

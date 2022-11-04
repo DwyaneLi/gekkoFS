@@ -26,7 +26,8 @@
 
   SPDX-License-Identifier: LGPL-3.0-or-later
 */
-
+// 四个rpc接口：读，写，删，统计
+// 发送的和接收的重点是post和get
 #include <client/preload_util.hpp>
 #include <client/rpc/forward_data.hpp>
 #include <client/rpc/rpc_types.hpp>
@@ -71,24 +72,29 @@ forward_write(const string& path, const void* buf, const bool append_flag,
 
     // Calculate chunkid boundaries and numbers so that daemons know in
     // which interval to look for chunks
+    // 计算要写入的偏移
     off64_t offset =
             append_flag ? in_offset : (updated_metadentry_size - write_size);
-
+    // 计算偏移对应的起始块索引
     auto chnk_start = block_index(offset, gkfs::config::rpc::chunksize);
+    // 计算写入结束的快索引
     auto chnk_end = block_index((offset + write_size) - 1,
                                 gkfs::config::rpc::chunksize);
 
     // Collect all chunk ids within count that have the same destination so
     // that those are send in one rpc bulk transfer
+    // 收集目的地相同的chunk
     std::map<uint64_t, std::vector<uint64_t>> target_chnks{};
     // contains the target ids, used to access the target_chnks map.
     // First idx is chunk with potential offset
     std::vector<uint64_t> targets{};
 
     // targets for the first and last chunk as they need special treatment
+    // 第一块和最后一块的目标，因为需要特殊处理
     uint64_t chnk_start_target = 0;
     uint64_t chnk_end_target = 0;
 
+    // 统计块和其对应的target
     for(uint64_t chnk_id = chnk_start; chnk_id <= chnk_end; chnk_id++) {
         auto target = CTX->distributor()->locate_data(path, chnk_id);
 
@@ -136,18 +142,21 @@ forward_write(const string& path, const void* buf, const bool append_flag,
     // to async_engine::broadcast(). This would allow us to avoid manually
     // looping over handles as we do below
     for(const auto& target : targets) {
-
+        
         // total chunk_size for target
+        // 要发送的块的总大小
         auto total_chunk_size =
                 target_chnks[target].size() * gkfs::config::rpc::chunksize;
 
         // receiver of first chunk must subtract the offset from first chunk
+        // 第一个数据块的接收者必须从第一个数据块中减去偏移量（为啥）
         if(target == chnk_start_target) {
             total_chunk_size -=
                     block_overrun(offset, gkfs::config::rpc::chunksize);
         }
 
         // receiver of last chunk must subtract
+        // 最后一个块也要减
         if(target == chnk_end_target &&
            !is_aligned(offset + write_size, gkfs::config::rpc::chunksize)) {
             total_chunk_size -= block_underrun(offset + write_size,
@@ -180,6 +189,7 @@ forward_write(const string& path, const void* buf, const bool append_flag,
             // TODO(amiranda): hermes will eventually provide a post(endpoint)
             // returning one result and a broadcast(endpoint_set) returning a
             // result_set. When that happens we can remove the .at(0) :/
+            //  这个应该就是发送
             handles.emplace_back(
                     ld_network_service->post<gkfs::rpc::write_data>(endp, in));
 
@@ -419,6 +429,7 @@ forward_read(const string& path, void* buf, const off64_t offset,
 
 /**
  * Send an RPC request to truncate a file to given new size
+ * // 发送RPC请求将文件截断为给定的新大小
  * @param path
  * @param current_size
  * @param new_size
@@ -435,6 +446,7 @@ forward_truncate(const std::string& path, size_t current_size,
 
     // Find out which data servers need to delete data chunks in order to
     // contact only them
+    // 找出那些数据服务器需要删除数据块，之和他们联系
     const unsigned int chunk_start =
             block_index(new_size, gkfs::config::rpc::chunksize);
     const unsigned int chunk_end = block_index(current_size - new_size - 1,
@@ -497,6 +509,7 @@ forward_truncate(const std::string& path, size_t current_size,
 
 /**
  * Send an RPC request to chunk stat all hosts
+ * //统计所有节点的chunk块信息
  * @return pair<error code, rpc::ChunkStat>
  */
 pair<int, ChunkStat>

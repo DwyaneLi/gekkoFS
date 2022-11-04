@@ -56,6 +56,7 @@ namespace preload {
 /*
  * Client file system config
  */
+// 客户端文件系统信息
 struct FsConfig {
     // configurable metadata
     bool atime_state;
@@ -70,10 +71,12 @@ struct FsConfig {
     std::string rootdir;
 };
 
+// 相对的状态，指文件吗
 enum class RelativizeStatus { internal, external, fd_unknown, fd_not_a_dir };
 
 /**
  * Singleton class of the client context with all relevant global data
+ * 具有所有相关全局数据的客户机上下文的单例类
  */
 class PreloadContext {
 
@@ -93,12 +96,13 @@ private:
 
     std::vector<hermes::endpoint> hosts_;
     uint64_t local_host_id_;
-    uint64_t fwd_host_id_;
+    uint64_t fwd_host_id_; // 这个是用来干嘛的？
     std::string rpc_protocol_;
     bool auto_sm_{false};
 
     bool interception_enabled_;
 
+    // 这个位图里，1是未注册的，0是已经注册的
     std::bitset<MAX_INTERNAL_FDS> internal_fds_;
     mutable std::mutex internal_fds_mutex_;
     bool internal_fds_must_relocate_;
