@@ -93,6 +93,8 @@ constexpr auto dirents_buff_size = (8 * 1024 * 1024); // 8 mega
  * Indicates the number of concurrent progress to drive I/O operations of chunk
  * files to and from local file systems The value is directly mapped to created
  * Argobots xstreams, controlled in a single pool with ABT_snoozer scheduler
+ * 表示驱动块文件与本地文件系统之间I/O操作的并发进度数。该值直接映射到已创建的Argobots xstreams，
+ * 通过abt_snozer调度程序控制在单个池中
  */
 constexpr auto daemon_io_xstreams = 8;
 // Number of threads used for RPC handlers at the daemon

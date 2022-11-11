@@ -45,6 +45,7 @@ namespace gkfs::metadata {
 
 /**
  * Factory to create DB instances
+ * 创建数据库实例，根据宏定义来决定生成rocksdb实例还是parallaxdb实例
  * @param path where KV store data is stored
  * @param id parallax or rocksdb (default) backend
  */

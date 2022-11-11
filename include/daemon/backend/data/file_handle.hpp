@@ -43,6 +43,7 @@ namespace gkfs::data {
 /**
  * @brief File handle class to encapsulate a file descriptor, allowing RAII
  * closing of the file descriptor.
+ * 文件句柄类封装文件描述符，允许RAII关闭文件描述符。
  */
 class FileHandle {
 
@@ -78,6 +79,7 @@ public:
 
     /**
      * @brief Checks for valid file descriptor value.
+     * 判断fd是否有效，不是默认的就有效
      * @return boolean if valid file descriptor
      */
     [[nodiscard]] bool
@@ -88,6 +90,7 @@ public:
     /**
      * @brief Retusn the file descriptor value used in this file handle
      * operation.
+     * 返回fd
      * @return file descriptor value
      */
     [[nodiscard]] int
@@ -97,6 +100,7 @@ public:
 
     /**
      * @brief Closes file descriptor and resets it to initial value
+     * 关闭file，并把handle设为默认的
      * @return boolean if file descriptor was successfully closed
      */
     bool

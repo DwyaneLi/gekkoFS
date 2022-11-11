@@ -57,6 +57,8 @@ public:
     /**
      * Exception wrapper on Status object. Throws NotFoundException if
      * s.IsNotFound(), general DBException otherwise
+     * Status对象上的异常包装器。如果s.IsNotFound()抛出NotFoundException，
+     *  否则抛出一般dbeexception
      * @param RocksDB status
      * @throws DBException
      */
@@ -65,6 +67,7 @@ public:
 
     /**
      * Used for setting KV store settings
+     * 用于设置
      */
     void
     optimize_database_impl();

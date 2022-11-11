@@ -694,7 +694,7 @@ gkfs_pwrite_ws(int fd, const void* buf, size_t count, off64_t offset) {
 
 /**
  * gkfs wrapper for write() system calls
- * //在当前pos后写， 也可能是追加写
+ * // lxl 在当前pos后写， 追加写，会改变pos位置，但是pwrite不会改变
  * errno may be set
  * @param fd
  * @param buf

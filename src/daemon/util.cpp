@@ -41,10 +41,14 @@ namespace gkfs::utils {
  * connection information of this daemon. If it doesn't exist, it is created.
  * The line includes the hostname (and rootdir_suffix if applicable) and the RPC
  * server's listening address.
- *
+ * 使用此守护进程的RPC连接信息将一行附加到现有的共享主机文件。如果它不存在，它就会被创建。
+ * 这一行包含主机名(如果适用，还有rootdir_suffix)和RPC服务器的监听地址。
  * NOTE, the shared file system must support strong consistency semantics to
  * ensure each daemon can write its information to the file even if the write
  * access is simultaneous.
+ * 共享文件系统必须支持强一致性语义，以确保每个守护进程可以将其信息写入文件，即使写访问是同时进行的。
+ * 
+ * 这里好像是写入本地文件，也就是说这个是共享的本地文件？
  * @endinternal
  */
 void
@@ -63,6 +67,7 @@ populate_hosts_file() {
                     ? gkfs::rpc::get_my_hostname(true)
                     : fmt::format("{}#{}", gkfs::rpc::get_my_hostname(true),
                                   GKFS_DATA->rootdir_suffix());
+    // lxl 写入hostfile
     lfstream << fmt::format("{} {}", hostname, RPC_DATA->self_addr_str())
              << std::endl;
     if(!lfstream) {
@@ -78,6 +83,8 @@ populate_hosts_file() {
  * This function removes the entire hosts file even if just one daemon is
  * shutdown. This makes sense because the data distribution calculation would be
  * misaligned if the entry of the current daemon was only removed.
+ * 即使只有一个守护进程关闭，这个函数也会删除整个hosts文件。这是有意义的，因为如果只删除
+ * 当前守护进程的条目，则数据分布计算将不一致。
  * @endinternal
  */
 void

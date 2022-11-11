@@ -28,6 +28,7 @@
 /**
  * @brief Declare all Margo RPC handler functions by name that
  * were registered in the daemon's main source file.
+ * 通过在守护进程的主资源文件中注册的名称声明所有Margo RPC处理程序函数。
  */
 
 #ifndef GKFS_DAEMON_RPC_DEFS_HPP
@@ -38,7 +39,7 @@ extern "C" {
 }
 
 /* visible API for RPC operations */
-
+// metadata的
 DECLARE_MARGO_RPC_HANDLER(rpc_srv_get_fs_config)
 
 DECLARE_MARGO_RPC_HANDLER(rpc_srv_create)
@@ -65,7 +66,7 @@ DECLARE_MARGO_RPC_HANDLER(rpc_srv_mk_symlink)
 #endif
 
 
-// data
+// data的
 DECLARE_MARGO_RPC_HANDLER(rpc_srv_remove_data)
 
 DECLARE_MARGO_RPC_HANDLER(rpc_srv_read)

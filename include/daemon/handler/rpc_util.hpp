@@ -47,6 +47,7 @@ extern "C" {
 namespace gkfs::rpc {
 
 /**
+ * lxl 释放所有分配的rpc资源
  * @brief Frees all given RPC resources allocated by Margo.
  * @tparam InputType Any RPC input struct from client requests
  * @tparam OutputType Any RPC output struct for client response
@@ -86,11 +87,14 @@ cleanup(hg_handle_t* handle, InputType* input, OutputType* output,
 
 /**
  * @brief Responds to a client request.
+ * lxl 响应客户端请求
  * @internal
  * Note, Mercury frees the output struct itself after it responded to the
  * client. Attempting to explicitly free the output struct can cause segfaults
  * because the response is non-blocking and we could free the resources before
  * Mercury has responded.
+ * Mercury在响应客户机后释放 输出结构 本身。尝试显式 释放输出结构 会导致段错误，因为响应是非阻塞的，
+ * 我们可以在Mercury响应之前释放资源。
  * @endinternal
  *
  * @tparam OutputType Any RPC output struct for client response
@@ -112,6 +116,7 @@ respond(hg_handle_t* handle, OutputType* output) {
 /**
  * @brief Combines responding to the client and cleaning up all RPC resources
  * after.
+ * lxl 把上面两个组合，先响应，再释放，下面两个同理
  * @tparam InputType Any RPC input struct from client requests
  * @tparam OutputType Any RPC output struct for client response
  * @param handle Pointer to Mercury RPC handle

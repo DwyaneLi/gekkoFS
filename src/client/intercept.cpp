@@ -1,4 +1,4 @@
-/*
+ /*
   Copyright 2018-2022, Barcelona Supercomputing Center (BSC), Spain
   Copyright 2015-2022, Johannes Gutenberg Universitaet Mainz, Germany
 
@@ -46,6 +46,9 @@ extern "C" {
 }
 
 namespace {
+// thread_local关键字的变量具有线程周期，这些变量在线程开始的时候就被生成，在线程销毁的时候就被销毁，
+// 并且每一个线程都具有一个独立的变量,也就是相当于每一个线程都有一份不同的变量
+// thread_local相当于通过将可变变量让每一个线程都拥有独立的副本，从而实现线程封装的机制
 
 thread_local bool reentrance_guard_flag;
 thread_local gkfs::syscall::info saved_syscall_info;
@@ -68,13 +71,21 @@ get_current_syscall_info() {
 
 /*
  * hook_internal -- interception hook for internal syscalls
- *
+ * Hook_internal—— 内部系统调用的拦截钩子
  * This hook is basically used to keep track of file descriptors created
  * internally by the library itself. This is important because some
  * applications (e.g. ssh) may attempt to close all open file descriptors
  * which would leave the library internals in an inconsistent state.
  * We forward syscalls to the kernel but we keep track of any syscalls that may
  * create or destroy a file descriptor so that we can mark them as 'internal'.
+ * // lxl
+ * 这个钩子基本上用来跟踪库本身内部创建的文件描述符。这一点很重要，
+ * 因为一些应用程序(例如ssh)可能试图关闭所有打开的文件描述符，这将使
+ * 库内部处于不一致的状态。我们将系统调用转发给内核，但我们会跟踪任何
+ * 可能创建或销毁文件描述符的系统调用，以便将它们标记为“内部”。
+ * 
+ * 也就是说这个函数是用来处理那些系统调用和库调用的文件的？不是普通的程序调用文件
+ *
  */
 inline int
 hook_internal(long syscall_number, long arg0, long arg1, long arg2, long arg3,
@@ -417,6 +428,7 @@ hook_internal(long syscall_number, long arg0, long arg1, long arg2, long arg3,
             // ignore any other syscalls, i.e.: pass them on to the kernel
             // (syscalls forwarded to the kernel that return are logged in
             // hook_forwarded_syscall())
+            //忽略任何其他的系统调用，例如:将它们传递给内核(转发到内核的系统调用返回时将记录在hook_forwarded_syscall()中)
             ::save_current_syscall_info(gkfs::syscall::from_internal_code |
                                         gkfs::syscall::to_kernel |
                                         gkfs::syscall::not_executed);
@@ -435,6 +447,7 @@ hook_internal(long syscall_number, long arg0, long arg1, long arg2, long arg3,
  * hook -- interception hook for application syscalls
  *
  * This hook is used to implement any application filesystem-related syscalls.
+ * 此钩子用于实现任何与应用程序文件系统相关的系统调用。
  */
 inline int
 hook(long syscall_number, long arg0, long arg1, long arg2, long arg3, long arg4,
@@ -802,6 +815,8 @@ hook(long syscall_number, long arg0, long arg1, long arg2, long arg3, long arg4,
 #ifdef SYS_socketcall
 /* Wraps socketcall in powerpc9, we only change syscalls that need special
  * treatment */
+// lxl 在powerpc9中包装套接字调用，我们只更改需要特殊处理的系统调用
+// 看下面的代码就是更改了一下参数的位置
 long
 socketcall_wrapper(long syscall_number, long& arg0, long& arg1, long& arg2,
                    long& arg3, long& arg4, long& arg5) {
@@ -851,7 +866,7 @@ socketcall_wrapper(long syscall_number, long& arg0, long& arg1, long& arg2,
 }
 #endif
 
-
+// lxl 没看出有啥用，就log记录一下syscall_info,然后把info改成no info的状态
 void
 hook_forwarded_syscall(long syscall_number, long arg0, long arg1, long arg2,
                        long arg3, long arg4, long arg5, long result) {
@@ -871,6 +886,7 @@ hook_forwarded_syscall(long syscall_number, long arg0, long arg1, long arg2,
     ::reset_current_syscall_info();
 }
 
+// lxl 没看出有啥用，也就日志记了一下
 void
 hook_clone_at_child(unsigned long flags, void* child_stack, int* ptid,
                     int* ctid, long newtls) {
@@ -890,6 +906,7 @@ hook_clone_at_child(unsigned long flags, void* child_stack, int* ptid,
     reentrance_guard_flag = false;
 }
 
+// lxl 没看出有啥用，也就日志记了一下
 void
 hook_clone_at_parent(unsigned long flags, void* child_stack, int* ptid,
                      int* ctid, long newtls, long returned_pid) {
@@ -913,6 +930,7 @@ hook_clone_at_parent(unsigned long flags, void* child_stack, int* ptid,
 
 namespace gkfs::preload {
 
+// lxl 对internal_hook的封装
 int
 internal_hook_guard_wrapper(long syscall_number, long arg0, long arg1,
                             long arg2, long arg3, long arg4, long arg5,
@@ -954,10 +972,17 @@ internal_hook_guard_wrapper(long syscall_number, long arg0, long arg1,
  * syscall internally. This internally used open() syscall is once again
  * forwarded to libgkfs_intercept, but using this flag we can notice this
  * case of reentering itself.
- *
+ * 
+ * //lxl
+ * reentrance_guard_flag标志允许库区分自己的系统调用的钩子。例如，在处理open()1系统调用时，
+ * libgkfs_intercept可能调用fopen()， fopen()在内部使用open()2系统调用。这个内部使用的open()2系统调用再次被转发到libgkfs_intercept，
+ * 但是使用这个标志，我们可以注意到重新输入自身的情况。
+* // 按这个意思就是open1是远程调用，open2是本地的，通过reentrance_guard_flag区分，就是用reentrance_guard_flag区分internal hook和 hook？
+
  * XXX This approach still contains a very significant bug, as libgkfs_intercept
  * being called inside a signal handler might easily forward a mock fd to the
  * kernel.
+ * 这种方法仍然包含一个非常重要的错误，因为在信号处理程序内部调用libgkfs_intercept可能很容易将模拟fd转发到内核。
  */
 int
 hook_guard_wrapper(long syscall_number, long arg0, long arg1, long arg2,

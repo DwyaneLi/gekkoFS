@@ -59,31 +59,46 @@ namespace {
 /**
  * @brief Serves a write request transferring the chunks associated with this
  * daemon and store them on the node-local FS.
+ * 服务一个写请求，传输与这个守护进程相关的块，并将它们存储在节点本地FS上。
  * @internal
  * The write operation has multiple steps:
  * 1. Setting up all RPC related information
+ * 1. 设置所有RPC相关信息
+ * 
  * 2. Allocating space for bulk transfer buffers
+ * 2.为批量传输缓冲区分配空间
+ * 
  * 3. By processing the RPC input, the chunk IDs that are hashing to this daemon
  * are computed based on a client-defined interval (start and endchunk id for
  * this write operation). The client does _not_ provide the daemons with a list
  * of chunk IDs because it is dynamic data that cannot be part of an RPC input
  * struct. Therefore, this information would need to be pulled with a bulk
  * transfer as well, adding unnecessary latency to the overall write operation.
- *
+ * 3. 通过处理RPC输入，根据客户端定义的间隔(此写操作的开始和结束块id)计算散列到此守护进程的块id。
+ * 客户端不向守护进程提供块id列表（只有告诉你一共有多少个块），因为它是动态数据（大小不确定），
+ * 不能作为RPC输入结构的一部分。因此，该信息也需要通过批量传输来获取，从而为整个写操作增加了不必要的延迟。
+ * 
  * For each relevant chunk, a PULL bulk transfer is issued. Once finished, a
  * non-blocking Argobots tasklet is launched to write the data chunk to the
  * backend storage. Therefore, bulk transfer and the backend I/O operation are
  * overlapping for efficiency.
+ * 对于每个相关块，都会发出一个PULL批量传输。一旦完成，一个非阻塞的Argobots微线程被启动，
+ * 将数据块写入后端存储。因此，为了提高效率，批量传输和后端I/O操作是重叠的。
+ * 
  * 4. Wait for all tasklets to complete adding up all the complete written data
  * size as reported by each task.
+ * 4. 等待所有微线程完成将每个任务报告的所有完整写入数据大小相加。
+ * 
  * 5. Respond to client (when all backend write operations are finished) and
  * cleanup RPC resources. Any error is reported in the RPC output struct. Note,
  * that backend write operations are not canceled while in-flight when a task
  * encounters an error.
- *
+ * 5. 响应客户端(当所有后端写操作完成时)并清理RPC资源。任何错误都将在RPC输出结构中报告。
+ * 注意，当任务遇到错误时，后台写操作不会在运行中取消。
+ * 
  * Note, refer to the data backend documentation w.r.t. how Argobots tasklets
  * work and why they are used.
- *
+ * 注意，请参考数据后端文档w.r.t。Argobots微线程是如何工作的以及为什么要使用它们。
  * All exceptions must be caught here and dealt with accordingly.
  * @endinteral
  * @param handle Mercury RPC handle
@@ -128,6 +143,7 @@ rpc_srv_write(hg_handle_t handle) {
 
     // We should call AGIOS before chunking (as that is an internal way to
     // handle the requests)
+    // 我们应该在分块之前调用AGIOS(因为这是处理请求的内部方法)
     if(!agios_add_request(agios_path, AGIOS_WRITE, in.offset,
                           in.total_chunk_size, request_id,
                           AGIOS_SERVER_ID_IGNORE, agios_eventual_callback,
@@ -150,6 +166,7 @@ rpc_srv_write(hg_handle_t handle) {
     ABT_eventual_free(&eventual);
 
     // Let AGIOS knows it can release the request, as it is completed
+    // 当请求完成时，让AGIOS知道它可以释放请求
     if(!agios_release_request(agios_path, AGIOS_WRITE, in.total_chunk_size,
                               in.offset)) {
         GKFS_DATA->spdlogger()->error(
@@ -163,7 +180,7 @@ rpc_srv_write(hg_handle_t handle) {
     void* bulk_buf;                          // buffer for bulk transfer
     vector<char*> bulk_buf_ptrs(in.chunk_n); // buffer-chunk offsets
     // create bulk handle and allocated memory for buffer with buf_sizes
-    // information
+    // information 使用buf_sizes信息创建块句柄并为缓冲区分配内存
     ret = margo_bulk_create(mid, 1, nullptr, &in.total_chunk_size,
                             HG_BULK_READWRITE, &bulk_handle);
     if(ret != HG_SUCCESS) {
@@ -173,6 +190,7 @@ rpc_srv_write(hg_handle_t handle) {
                                           static_cast<hg_bulk_t*>(nullptr));
     }
     // access the internally allocated memory buffer and put it into buf_ptrs
+    // 访问内部分配的内存缓冲区并将其放入buf_ptrs中
     uint32_t actual_count;
     ret = margo_bulk_access(bulk_handle, 0, in.total_chunk_size,
                             HG_BULK_READWRITE, 1, &bulk_buf,
@@ -188,14 +206,19 @@ rpc_srv_write(hg_handle_t handle) {
 
     auto path = make_shared<string>(in.path);
     // chnk_ids used by this host
+    // 该主机有的chk_ids
     vector<uint64_t> chnk_ids_host(in.chunk_n);
     // counter to track how many chunks have been assigned
+    // 计算有多少个块在本机上
     auto chnk_id_curr = static_cast<uint64_t>(0);
     // chnk sizes per chunk for this host
+    // 每个chunk的size
     vector<uint64_t> chnk_sizes(in.chunk_n);
     // how much size is left to assign chunks for writing
+    // 还剩下多少大小可以分配用于写入的块
     auto chnk_size_left_host = in.total_chunk_size;
     // temporary traveling pointer
+    // 临时移动指针
     auto chnk_ptr = static_cast<char*>(bulk_buf);
     /*
      * consider the following cases:
@@ -208,6 +231,14 @@ rpc_srv_write(hg_handle_t handle) {
      * 5. Last chunk (if multiple chunks are written): Don't write CHUNKSIZE but
      * chnk_size_left for this destination Last chunk can also happen if only
      * one chunk is written. This is covered by 2 and 3.
+     * 
+     * 需要考虑以下几种情况：
+     * 1. 第一个块是否在这个节点上，并且是否有偏移？
+     * 2. 如果偏移，是否只有一个块要被写入？
+     * 3. 如果没有偏移，是否只有一个块要被写入？
+     * 4. 开始块和结束块之间的块的大小为CHUNKSIZE
+     * 5. 最后一个块(如果写入多个块):不要写入CHUNKSIZE，而是为这个目标写入chnk_size_left。
+     *    如果只写入一个块，最后一个块也可以发生。这被2和3覆盖了。
      */
     // temporary variables
     auto transfer_size = (bulk_size <= gkfs::config::rpc::chunksize)
@@ -221,13 +252,16 @@ rpc_srv_write(hg_handle_t handle) {
     /*
      * 3. Calculate chunk sizes that correspond to this host, transfer data, and
      * start tasks to write to disk
+     * 计算与此主机对应的块大小，传输数据，并启动写入磁盘的任务
      */
     // Start to look for a chunk that hashes to this host with the first chunk
     // in the buffer
+    // 找到第一个散列到本机上的chunk
     for(auto chnk_id_file = in.chunk_start;
         chnk_id_file <= in.chunk_end && chnk_id_curr < in.chunk_n;
         chnk_id_file++) {
         // Continue if chunk does not hash to this host
+        // 不是定位在本机上的直接跳过
 #ifndef GKFS_ENABLE_FORWARDING
         if(RPC_DATA->distributor()->locate_data(in.path, chnk_id_file,
                                                 host_size) != host_id) {
@@ -243,13 +277,15 @@ rpc_srv_write(hg_handle_t handle) {
 #endif
 
         chnk_ids_host[chnk_id_curr] =
-                chnk_id_file; // save this id to host chunk list
+                chnk_id_file; // save this id to host chunk list 保存一下捏
         // offset case. Only relevant in the first iteration of the loop and if
         // the chunk hashes to this host
+        // 如果第一个chunk在这个主机，并且有offset
         if(chnk_id_file == in.chunk_start && in.offset > 0) {
             // if only 1 destination and 1 chunk (small write) the transfer_size
             // == bulk_size
             size_t offset_transfer_size = 0;
+            // 如果要写的很小的话，就只要写一个块，并且写的大小加上offset好不到一个chunk的大小
             if(in.offset + bulk_size <= gkfs::config::rpc::chunksize)
                 offset_transfer_size = bulk_size;
             else
@@ -267,6 +303,7 @@ rpc_srv_write(hg_handle_t handle) {
                 return gkfs::rpc::cleanup_respond(&handle, &in, &out,
                                                   &bulk_handle);
             }
+            // 存储相应的信息
             bulk_buf_ptrs[chnk_id_curr] = chnk_ptr;
             chnk_sizes[chnk_id_curr] = offset_transfer_size;
             chnk_ptr += offset_transfer_size;
@@ -275,6 +312,8 @@ rpc_srv_write(hg_handle_t handle) {
             local_offset = in.total_chunk_size - chnk_size_left_host;
             // origin offset of a chunk is dependent on a given offset in a
             // write operation
+            // 块的起始偏移量依赖于写操作中的给定偏移量
+            // 计算origin offset
             if(in.offset > 0)
                 origin_offset = (gkfs::config::rpc::chunksize - in.offset) +
                                 ((chnk_id_file - in.chunk_start) - 1) *
@@ -283,6 +322,7 @@ rpc_srv_write(hg_handle_t handle) {
                 origin_offset = (chnk_id_file - in.chunk_start) *
                                 gkfs::config::rpc::chunksize;
             // last chunk might have different transfer_size
+            // 最后一个块可能有不同的transfer_size
             if(chnk_id_curr == in.chunk_n - 1)
                 transfer_size = chnk_size_left_host;
             GKFS_DATA->spdlogger()->trace(
@@ -291,6 +331,7 @@ rpc_srv_write(hg_handle_t handle) {
                     in.total_chunk_size, chnk_size_left_host, origin_offset,
                     local_offset, transfer_size);
             // RDMA the data to here
+            // 通过RDMA把源数据放到本地的缓冲区
             ret = margo_bulk_transfer(mid, HG_BULK_PULL, hgi->addr,
                                       in.bulk_handle, origin_offset,
                                       bulk_handle, local_offset, transfer_size);
@@ -326,12 +367,15 @@ rpc_srv_write(hg_handle_t handle) {
     }
     // Sanity check that all chunks where detected in previous loop
     // TODO don't proceed if that happens.
+    // 健全检查所有块在前面的循环中被检测到
+    // 如果发生这种情况，不要继续。
     if(chnk_size_left_host != 0)
         GKFS_DATA->spdlogger()->warn(
                 "{}() Not all chunks were detected!!! Size left {}", __func__,
                 chnk_size_left_host);
     /*
      * 4. Read task results and accumulate in out.io_size
+          读取任务结果(wait_for_tasks())并累积在out.io_size中
      */
     auto write_result = chunk_op.wait_for_tasks();
     out.err = write_result.first;
@@ -359,6 +403,7 @@ rpc_srv_write(hg_handle_t handle) {
 }
 
 /**
+ * 和上面的写操作流程区别不大
  * @brief Serves a read request reading the chunks associated with this
  * daemon from the node-local FS and transferring them back to the client.
  * @internal
@@ -378,11 +423,14 @@ rpc_srv_write(hg_handle_t handle) {
  * transferring each chunk back to the client when a tasklet finishes.
  * Therefore, bulk transfer and the backend I/O operation are overlapping for
  * efficiency. The read size is added up for all tasklets.
+ * 等待所有微线程完成读操作，当微线程完成时，PUSH批量将每个块传输回客户端。因此，
+ * 为了提高效率，批量传输和后端I/O操作是重叠的。所有微线程的读取大小相加。
  * 5. Respond to client (when all bulk transfers are finished) and cleanup RPC
  * resources. Any error is reported in the RPC output struct. Note, that backend
  * read operations are not canceled while in-flight when a task encounters an
  * error.
- *
+ * 响应客户端(当所有批量传输完成时)并清理RPC资源。任何错误都将在RPC输出结构中报告。
+ * 注意，当任务遇到错误时，后台读操作不会在运行中取消。
  * Note, refer to the data backend documentation w.r.t. how Argobots tasklets
  * work and why they are used.
  *
@@ -631,11 +679,12 @@ rpc_srv_read(hg_handle_t handle) {
 /**
  * @brief Serves a file truncate request and remove all corresponding chunk
  * files on this daemon.
+ * 为文件截断请求提供服务，并删除这个守护进程上所有对应的块文件。
  * @internal
  * A truncate operation includes decreasing the file size of the metadata entry
  * (if hashing to this daemon) and removing all corresponding chunks exceeding
  * the new file size.
- *
+ * 截断操作包括减少元数据项的文件大小(如果元数据被哈希到这里)，并删除超过新文件大小的所有相应块。
  * All exceptions must be caught here and dealt with accordingly.
  * @endinteral
  * @param handle Mercury RPC handle
@@ -678,6 +727,7 @@ rpc_srv_truncate(hg_handle_t handle) {
 
 
 /**
+ * 统计信息，没有in
  * @brief Serves a chunk stat request, responding with space information of the
  * node local file system.
  * @internal

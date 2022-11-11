@@ -53,6 +53,7 @@ class Stats;
 
 namespace daemon {
 
+// lxl 用来记录file system的信息
 class FsData {
 
 private:

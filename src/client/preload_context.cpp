@@ -405,6 +405,7 @@ PreloadContext::is_internal_fd(int fd) const {
     return !internal_fds_.test(pos);
 }
 
+// 强制占用[0，max_user_fds)
 void
 PreloadContext::protect_user_fds() {
 

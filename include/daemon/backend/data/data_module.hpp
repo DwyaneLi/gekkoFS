@@ -40,6 +40,7 @@ namespace gkfs::data {
 /**
  * @brief The data module class providing the data backend for the daemon as a
  * singleton.
+ * 数据模块类作为单例为守护进程提供数据后端。
  */
 class DataModule {
 
@@ -57,6 +58,7 @@ public:
         return &instance;
     }
 
+    // = delete说明这个不能用捏
     DataModule(DataModule const&) = delete;
 
     void

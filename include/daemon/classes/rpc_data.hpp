@@ -25,7 +25,7 @@
 
   SPDX-License-Identifier: GPL-3.0-or-later
 */
-
+// 一些简单的getter和setter
 #ifndef LFS_RPC_DATA_HPP
 #define LFS_RPC_DATA_HPP
 
@@ -48,9 +48,11 @@ private:
 
     // Margo IDs. They can also be used to retrieve the Mercury classes and
     // contexts that were created at init time
+    // Margo id。它们还可以用于检索初始化时创建的Mercury类和上下文
     margo_instance_id server_rpc_mid_;
 
     // Argobots I/O pools and execution streams
+    // Argobots是一个轻量级的低级线程和任务框架
     ABT_pool io_pool_;
     std::vector<ABT_xstream> io_streams_;
     std::string self_addr_str_;

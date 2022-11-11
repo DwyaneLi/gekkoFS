@@ -515,7 +515,7 @@ forward_get_dirents(const string& path) {
             out = handles[i].get().at(0);
             // skip processing dirent data if there was an error during send
             // In this case all responses are gathered but their contents
-            // skipped
+            // 如果在发送过程中出现错误，则跳过直接数据的处理。在本例中，收集了所有响应，但跳过了它们的内容
             if(send_error)
                 continue;
 
@@ -540,6 +540,7 @@ forward_get_dirents(const string& path) {
         // large_buffer, recover it by computing the base_address for each
         // particular server and adding the appropriate offsets
         // 每个服务器将信息写入其在large_buffer中预定义的区域，通过计算每个特定服务器的base_address并添加适当的偏移量来恢复信息
+        // 就是name 和 bool，bool是type，代表是文件还是目录
         assert(exposed_buffers[i].count() == 1);
         void* base_ptr = exposed_buffers[i].begin()->data();
 

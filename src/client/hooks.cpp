@@ -572,6 +572,7 @@ hook_dup2(unsigned int oldfd, unsigned int newfd) {
     return syscall_no_intercept_wrapper(SYS_dup2, oldfd, newfd);
 }
 
+// 不支持
 int
 hook_dup3(unsigned int oldfd, unsigned int newfd, int flags) {
 
@@ -686,6 +687,7 @@ hook_fchmod(unsigned int fd, mode_t mode) {
     return syscall_no_intercept_wrapper(SYS_fchmod, fd, mode);
 }
 
+// 改变当前工作目录，也就是cd啦
 int
 hook_chdir(const char* path) {
 
@@ -721,6 +723,7 @@ hook_chdir(const char* path) {
     return 0;
 }
 
+// 和上面那个一样，只不过用文件描述符
 int
 hook_fchdir(unsigned int fd) {
 
@@ -758,6 +761,7 @@ hook_fchdir(unsigned int fd) {
     return 0;
 }
 
+// 获取当前工作目录
 int
 hook_getcwd(char* buf, unsigned long size) {
 
@@ -870,6 +874,7 @@ hook_fcntl(unsigned int fd, unsigned int cmd, unsigned long arg) {
     }
 }
 
+// 不支持
 int
 hook_renameat(int olddfd, const char* oldname, int newdfd, const char* newname,
               unsigned int flags) {
@@ -959,6 +964,7 @@ hook_fstatfs(unsigned int fd, struct statfs* buf) {
 
 /* The function should broadcast a flush message (pmem_persist i.e.) if the
  * application needs the capabilities*/
+// 如果应用程序需要这些功能，函数应该广播一个刷新消息(即pmem_persist)
 int
 hook_fsync(unsigned int fd) {
 

@@ -49,6 +49,7 @@ namespace {
 /**
  * @brief Responds with general file system meta information requested on client
  * startup.
+ * 获取文件系统的信息
  * @internal
  * Most notably this is where the client gets the information on which path
  * GekkoFS is accessible.

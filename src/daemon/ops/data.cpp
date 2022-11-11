@@ -51,11 +51,13 @@ namespace gkfs::data {
  * @internal
  * Exclusively used by the Argobots tasklet. Argument args has the following
  fields:
+   由Argobots微线程独家使用。参数args有以下字段:
  * const string* path;
    size_t size;
    ABT_eventual* eventual;
  * This function is driven by the IO pool. So, there is a maximum allowed number
  of concurrent operations allowed per daemon.
+  该函数由IO池驱动。因此，有一个每个守护进程允许的最大并发操作数。
  * @endinternal
  */
 void
@@ -66,6 +68,7 @@ ChunkTruncateOperation::truncate_abt(void* _arg) {
 
     assert(_arg);
     // Unpack args
+    // 拆封args
     auto* arg = static_cast<struct chunk_truncate_args*>(_arg);
     const string& path = *(arg->path);
     const size_t size = arg->size;
@@ -74,12 +77,16 @@ ChunkTruncateOperation::truncate_abt(void* _arg) {
         // get chunk from where to cut off
         auto chunk_id_start = block_index(size, gkfs::config::rpc::chunksize);
         // do not last delete chunk if it is in the middle of a chunk
+        // 如果数据在数据块的中间，最后不删除数据块
         auto left_pad = block_overrun(size, gkfs::config::rpc::chunksize);
         if(left_pad != 0) {
+            // 把单个这个chunk的数据先阶段截断处理
             GKFS_DATA->storage()->truncate_chunk_file(path, chunk_id_start,
                                                       left_pad);
+            // ++是因为后面的chunk全都要被删除
             chunk_id_start++;
         }
+        // 删除后面所有的chunk
         GKFS_DATA->storage()->trim_chunk_space(path, chunk_id_start);
     } catch(const ChunkStorageException& err) {
         GKFS_DATA->spdlogger()->error("{}() {}", __func__, err.what());
@@ -105,6 +112,7 @@ ChunkTruncateOperation::ChunkTruncateOperation(const string& path)
  * @internal
  * Starts a tasklet for requested truncate. In essence all chunk files after the
  * given offset is removed Only one truncate call is allowed at a time
+ * 为请求的截断启动微线程。实际上，在删除给定偏移量之后的所有块文件一次只允许一个截断调用
  * @endinternal
  */
 void
@@ -128,6 +136,7 @@ ChunkTruncateOperation::truncate(size_t size) {
     task_arg.size = size;
     task_arg.eventual = task_eventuals_[0];
 
+    // 启动一个微线程
     abt_err = ABT_task_create(RPC_DATA->io_pool(), truncate_abt, &task_arg_,
                               &abt_tasks_[0]);
     if(abt_err != ABT_SUCCESS) {
@@ -218,6 +227,8 @@ ChunkWriteOperation::ChunkWriteOperation(const string& path, size_t n)
  * Write buffer from a single chunk referenced by its ID. Put task into IO
  * queue. On failure the write operations is aborted, throwing an error, and
  * cleaned up. The caller may repeat a failed call.
+ * 从ID引用的单个块写缓冲区。将任务放入IO队列中。如果写操作失败，则中止，
+ * 抛出错误并清除。呼叫方可能重复失败的呼叫。
  * @endinternal
  */
 void
@@ -267,6 +278,7 @@ ChunkWriteOperation::wait_for_tasks() {
      * gather all Eventual's information. do not throw here to properly cleanup
      * all eventuals On error, cleanup eventuals and set written data to 0 as
      * written data is corrupted
+     * 收集最终的所有信息。错误时，清除结果并将写入数据设置为0，因为写入数据已损坏
      */
     for(auto& e : task_eventuals_) {
         ssize_t* task_size = nullptr;
@@ -297,10 +309,11 @@ ChunkWriteOperation::wait_for_tasks() {
     return make_pair(io_err, total_written);
 }
 
+// 下面的是read的，其实read和write差不多，主要是回调那里有点区别
 /* ------------------------------------------------------------------------
  * -------------------------- READ ----------------------------------------
  * ------------------------------------------------------------------------*/
-
+ 
 /**
  * @internal
  * Used by an argobots tasklet. Argument args has the following fields:
@@ -326,6 +339,7 @@ ChunkReadOperation::read_file_abt(void* _arg) {
     try {
         // Under expected circumstances (error or no error) read_chunk will
         // signal the eventual
+        // 在预期的情况下(错误或没有错误)，read_chunk将发出最终的信号
         read = GKFS_DATA->storage()->read_chunk(path, arg->chnk_id, arg->buf,
                                                 arg->size, arg->off);
     } catch(const ChunkStorageException& err) {
@@ -355,6 +369,8 @@ ChunkReadOperation::ChunkReadOperation(const string& path, size_t n)
  * Read buffer to a single chunk referenced by its ID. Put task into IO queue.
  * On failure the read operations is aborted, throwing an error, and cleaned up.
  * The caller may repeat a failed call.
+ * 将缓冲区读取到由其ID引用的单个块。将任务放入IO队列中。如果读取操作失败，则中止，
+ * 抛出错误并清除。呼叫方可能重复失败的呼叫。
  * @endinternal
  */
 void
@@ -393,6 +409,7 @@ ChunkReadOperation::read_nonblock(size_t idx, const uint64_t chunk_id,
     }
 }
 
+// 这个函数还要完成将buf推到源的任务
 pair<int, size_t>
 ChunkReadOperation::wait_for_tasks_and_push_back(const bulk_args& args) {
     GKFS_DATA->spdlogger()->trace("ChunkReadOperation::{}() enter: path '{}'",
@@ -406,6 +423,8 @@ ChunkReadOperation::wait_for_tasks_and_push_back(const bulk_args& args) {
      * all eventuals As soon as an error is encountered, bulk_transfers will no
      * longer be executed as the data would be corrupted The loop continues
      * until all eventuals have been cleaned and freed.
+     * 收集最终的所有信息。一旦遇到错误，bulk_transfers将不再执行，因为数据将被损坏。
+     * 循环将继续，直到所有的eventuals被清理和释放。
      */
     for(uint64_t idx = 0; idx < task_args_.size(); idx++) {
         ssize_t* task_size = nullptr;
@@ -427,6 +446,7 @@ ChunkReadOperation::wait_for_tasks_and_push_back(const bulk_args& args) {
         assert(task_size != nullptr);
         if(*task_size < 0) {
             // sparse regions do not have chunk files and are therefore skipped
+            // 稀疏区域没有块文件，因此会被跳过
             if(-(*task_size) == ENOENT) {
                 ABT_eventual_free(&task_eventuals_[idx]);
                 continue;
@@ -435,6 +455,7 @@ ChunkReadOperation::wait_for_tasks_and_push_back(const bulk_args& args) {
         } else if(*task_size == 0) {
             // read size of 0 is not an error and can happen because reading the
             // end-of-file
+            // 读取大小为0不是一个错误，可能发生的原因是读取文件末尾
             ABT_eventual_free(&task_eventuals_[idx]);
             continue;
         } else {

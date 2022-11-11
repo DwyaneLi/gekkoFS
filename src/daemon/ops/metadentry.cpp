@@ -25,7 +25,7 @@
 
   SPDX-License-Identifier: GPL-3.0-or-later
 */
-
+// lxl 这个可以说是对backend里，db操作的封装
 #include <daemon/ops/metadentry.hpp>
 #include <daemon/backend/metadata/db.hpp>
 #include <daemon/backend/data/chunk_storage.hpp>
@@ -38,6 +38,7 @@ namespace gkfs::metadata {
 /**
  * Returns the metadata of an object at a specific path. The metadata can be of
  * dummy values if configured
+ * // lxl 这个是根据path返回一个metadata对象
  * @param path
  * @param attr
  * @return
@@ -49,6 +50,7 @@ get(const std::string& path) {
 
 /**
  * Get metadentry string only for path
+ * // lxl 这个是根据path返回一个已经被序列化的metadata，也就是string
  * @param path
  * @return
  */
@@ -59,6 +61,7 @@ get_str(const std::string& path) {
 
 /**
  * Gets the size of a metadentry
+ * // 获取size
  * @param path
  * @param ret_size (return val)
  * @return err
@@ -91,6 +94,7 @@ get_dirents_extended(const std::string& dir) {
 
 /**
  * Creates metadata (if required) and dentry at the same time
+ * // 将md序列化加入db
  * @param path
  * @param mode
  * @throws DBException
@@ -120,6 +124,7 @@ create(const std::string& path, Metadata& md) {
 
 /**
  * Update metadentry by given Metadata object and path
+ * 只更新value
  * @param path
  * @param md
  */
@@ -133,7 +138,7 @@ update(const string& path, Metadata& md) {
  * after update
  * @param path
  * @param io_size
- * @return the updated size
+ * @return the updated size 不返回
  */
 void
 update_size(const string& path, size_t io_size, off64_t offset, bool append) {

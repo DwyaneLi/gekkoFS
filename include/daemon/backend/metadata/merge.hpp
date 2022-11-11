@@ -119,6 +119,7 @@ class MetadataMergeOperator : public rocksdb::MergeOperator {
 public:
     ~MetadataMergeOperator() override = default;
 
+    // 在这个项目里，只用了fullmerge
     bool
     FullMergeV2(const MergeOperationInput& merge_in,
                 MergeOperationOutput* merge_out) const override;

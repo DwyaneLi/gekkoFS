@@ -77,6 +77,7 @@ rpc_srv_create(hg_handle_t handle) {
     gkfs::metadata::Metadata md(in.mode);
     try {
         // create metadentry
+        // lxl 创建metadata条目，并且把他放到rocksdb里
         gkfs::metadata::create(in.path, md);
         out.err = 0;
     } catch(const gkfs::metadata::ExistsException& e) {
@@ -95,6 +96,7 @@ rpc_srv_create(hg_handle_t handle) {
     }
 
     // Destroy handle when finished
+    // 释放input和摧毁handle
     margo_free_input(handle, &in);
     margo_destroy(handle);
     if(GKFS_DATA->enable_stats()) {
@@ -111,7 +113,8 @@ rpc_srv_create(hg_handle_t handle) {
  * The stat request reads the corresponding entry in the KV store. The value
  * string is directly passed to the client. It sets an error code if the object
  * does not exist or in other unexpected errors.
- *
+ * 统计请求读取KV存储中相应的条目。值字符串直接传递给客户端。如果对象不存在或出现其他意外错误，则设置错误代码
+ * lxl 其实就是返回db里已经被序列化的metadata，在client那边可以用这个值回复成metadata结构
  * All exceptions must be caught here and dealt with accordingly.
  * @endinteral
  * @param handle Mercury RPC handle
@@ -132,6 +135,7 @@ rpc_srv_stat(hg_handle_t handle) {
     try {
         // get the metadata
         val = gkfs::metadata::get_str(in.path);
+        // lxl 把val放到out里返回
         out.db_val = val.c_str();
         out.err = 0;
         GKFS_DATA->spdlogger()->debug("{}() Sending output mode '{}'", __func__,
@@ -166,6 +170,7 @@ rpc_srv_stat(hg_handle_t handle) {
 /**
  * @brief Serves a request to decrease the file size in the object's KV store
  * entry.
+ * lxl 处理减少file size的请求
  * @internal
  * All exceptions must be caught here and dealt with accordingly. Any errors are
  * placed in the response.
@@ -189,6 +194,7 @@ rpc_srv_decr_size(hg_handle_t handle) {
                                   in.path, in.length);
 
     try {
+        // 减少size
         GKFS_DATA->mdb()->decrease_size(in.path, in.length);
         out.err = 0;
     } catch(const std::exception& e) {
@@ -218,10 +224,13 @@ rpc_srv_decr_size(hg_handle_t handle) {
  * needed to remove all data chunks. The metadata is removed first to ensure
  * data isn't removed while the metadata is still available. This could cause
  * issues because a stat request would say that the file still exists.
- *
+ * 处理程序触发KV存储条目的删除，但仍然向客户机返回文件模式和大小信息。这是因为需要大小来删除所有数据块。
+ * 首先删除元数据，以确保在元数据仍然可用时数据不会被删除。这可能会导致问题，因为一个统计请求会说文件仍然存在。
+ * 
  * gkfs::config::metadata::implicit_data_removal offers an optimization to
  * implicitly remove the data chunks on the metadata node. This can increase
  * remove performance for small files.
+ * Gkfs::config::metadata::implicit_data_removal提供了隐式删除元数据节点上数据块的优化。这可以提高小文件的删除性能。
  *
  * All exceptions must be caught here and dealt with accordingly. Any errors are
  * placed in the response.
@@ -247,6 +256,7 @@ rpc_srv_remove_metadata(hg_handle_t handle) {
         auto md = gkfs::metadata::get(in.path);
         gkfs::metadata::remove(in.path);
         out.err = 0;
+        // 还是要记录mode和size，仍然向客户机返回文件模式和大小信息。这是因为需要大小来删除所有数据块。
         out.mode = md.mode();
         out.size = md.size();
         if constexpr(gkfs::config::metadata::implicit_data_removal) {
@@ -290,7 +300,8 @@ rpc_srv_remove_metadata(hg_handle_t handle) {
  * @internal
  * The handler simply issues the removal of all chunk files on the local file
  * system.
- *
+ * 处理程序只是发出删除本地文件系统上所有块文件的命令。
+ * 这个和metadata没关系
  * All exceptions must be caught here and dealt with accordingly. Any errors are
  * placed in the response.
  * @endinteral
@@ -312,6 +323,7 @@ rpc_srv_remove_data(hg_handle_t handle) {
 
     // Remove all chunks for that file
     try {
+        // 向本地文件系统发出删除所有数据块的命令
         GKFS_DATA->storage()->destroy_chunk_space(in.path);
         out.err = 0;
     } catch(const gkfs::data::ChunkStorageException& e) {
@@ -338,7 +350,7 @@ rpc_srv_remove_data(hg_handle_t handle) {
 }
 
 /**
- * @brief Serves a request to update the metadata. This function is UNUSED.
+ * @brief Serves a request to update the metadata. This function is UNUSED. 这个没用到 为啥不用ops/metadentry.cpp里的update
  * @internal
  * All exceptions must be caught here and dealt with accordingly. Any errors are
  * placed in the response.
@@ -428,6 +440,7 @@ rpc_srv_update_metadentry_size(hg_handle_t handle) {
         out.err = 0;
         // TODO the actual size of the file could be different after the size
         // update
+        // 文件的实际大小可能在大小更新后有所不同，这里好像没管？
         // do to concurrency on size
         out.ret_size = in.size + in.offset;
     } catch(const gkfs::metadata::NotFoundException& e) {
@@ -480,6 +493,7 @@ rpc_srv_get_metadentry_size(hg_handle_t handle) {
 
     // do update
     try {
+        // 直接获取值，放到out里
         out.ret_size = gkfs::metadata::get_size(in.path);
         out.err = 0;
     } catch(const gkfs::metadata::NotFoundException& e) {
@@ -512,11 +526,12 @@ rpc_srv_get_metadentry_size(hg_handle_t handle) {
  * This handler triggers a KV store scan starting at the given path prefix that
  * represents a directory. All KV store entries are returned via a bulk transfer
  * as it can involve an arbitrary number of entries.
- *
+ * 该处理程序从表示目录的给定路径前缀开始触发KV存储扫描。所有KV存储条目通过批量传输返回，
+ * 因为它可以涉及任意数量的条目。
  * Note, the bulk buffer size is decided by the client statically although it
  * doesn't know if it the space is sufficient to accomodate all entries. This is
  * planned to be fixed in the future.
- *
+ * 大容量缓冲区的大小是由客户端静态决定的，尽管它不知道空间是否足够容纳所有条目。这个问题计划在未来解决。
  * All exceptions must be caught here and dealt with accordingly. Any errors are
  * placed in the response.
  * @endinteral
@@ -542,6 +557,7 @@ rpc_srv_get_dirents(hg_handle_t handle) {
     }
 
     // Retrieve size of source buffer
+    // lxl 检索源缓冲区的大小
     auto hgi = margo_get_info(handle);
     auto mid = margo_hg_info_get_instance(hgi);
     auto bulk_size = margo_bulk_get_size(in.bulk_handle);
@@ -549,6 +565,7 @@ rpc_srv_get_dirents(hg_handle_t handle) {
                                   __func__, in.path, bulk_size);
 
     // Get directory entries from local DB
+    // lxl 从rocksDB里获取目录条
     vector<pair<string, bool>> entries{};
     try {
         entries = gkfs::metadata::get_dirents(in.path);
@@ -562,13 +579,16 @@ rpc_srv_get_dirents(hg_handle_t handle) {
             "{}() path '{}' Read database with '{}' entries", __func__, in.path,
             entries.size());
 
+    // lxl 如果当前是个空目录，就直接返回
     if(entries.empty()) {
         out.err = 0;
         return gkfs::rpc::cleanup_respond(&handle, &in, &out);
     }
 
     // Calculate total output size
+    // lxl 算目录名的总大小
     // TODO OPTIMIZATION: this can be calculated inside db_get_dirents
+    // 优化方案，可以直接在db里算好
     size_t tot_names_size = 0;
     for(auto const& e : entries) {
         tot_names_size += e.first.size();
@@ -578,6 +598,7 @@ rpc_srv_get_dirents(hg_handle_t handle) {
     // size for \0 character)
     size_t out_size =
             tot_names_size + entries.size() * (sizeof(bool) + sizeof(char));
+    // lxl 源的缓冲区大小小于要发送的大小，出错，返回
     if(bulk_size < out_size) {
         // Source buffer is smaller than total output size
         GKFS_DATA->spdlogger()->error(
@@ -590,6 +611,7 @@ rpc_srv_get_dirents(hg_handle_t handle) {
     void* bulk_buf; // buffer for bulk transfer
     // create bulk handle and allocated memory for buffer with out_size
     // information
+    // lxl 使用out_size信息创建bulk handle并为缓冲区分配内存
     ret = margo_bulk_create(mid, 1, nullptr, &out_size, HG_BULK_READ_ONLY,
                             &bulk_handle);
     if(ret != HG_SUCCESS) {
@@ -598,8 +620,10 @@ rpc_srv_get_dirents(hg_handle_t handle) {
         return gkfs::rpc::cleanup_respond(&handle, &in, &out, &bulk_handle);
     }
     // access the internally allocated memory buffer and put it into bulk_buf
+    // 访问内部分配的内存缓冲区并将其放入bulk_buf中
     uint32_t actual_count; // number of segments. we use one here because we
                            // push the whole buffer at once
+                           // 段的数量。我们在这里使用一个，因为我们一次推入整个缓冲区
     ret = margo_bulk_access(bulk_handle, 0, out_size, HG_BULK_READ_ONLY, 1,
                             &bulk_buf, &out_size, &actual_count);
     if(ret != HG_SUCCESS || actual_count != 1) {
@@ -614,6 +638,8 @@ rpc_srv_get_dirents(hg_handle_t handle) {
             __func__, in.path, entries.size(), out_size, out_size);
 
     // Serialize output data on local buffer
+    // lxl 把entry里的东西放到缓冲区里
+    // /**************bool*************/************name************/
     auto out_buff_ptr = static_cast<char*>(bulk_buf);
     auto bool_ptr = reinterpret_cast<bool*>(out_buff_ptr);
     auto names_ptr = out_buff_ptr + entries.size();
@@ -637,6 +663,7 @@ rpc_srv_get_dirents(hg_handle_t handle) {
             "{}() path '{}' entries '{}' out_size '{}'. Copied data to bulk_buffer. NEXT bulk_transfer",
             __func__, in.path, entries.size(), out_size);
 
+    // 通过handle传递缓冲区， in_handle 和 本地的bulk_handle
     ret = margo_bulk_transfer(mid, HG_BULK_PUSH, hgi->addr, in.bulk_handle, 0,
                               bulk_handle, 0, out_size);
     if(ret != HG_SUCCESS) {
@@ -667,11 +694,14 @@ rpc_srv_get_dirents(hg_handle_t handle) {
 /**
  * @brief Serves a request to return all file system objects in a directory
  * including their size and create timestamp.
+ * 和上面那个差不多，只不过多返回了size和创建的时间，也就是多放了东西在缓冲区里
  * @internal
  * This is an extension to the above rpc_srv_get_dirents. However, this handler
  * is an optimization which needs to be refactored and merged with with
  * rpc_srv_get_dirents due to redundant code (TODO).
- *
+ * 这是对上面的rpc_srv_get_dirents的扩展。然而，由于冗余代码(TODO)，
+ * 这个处理程序是一个需要重构并与rpc_srv_get_dirents合并的优化。
+ * 
  * Note, the bulk buffer size is decided by the client statically although it
  * doesn't know if it the space is sufficient to accommodate all entries. This
  * is planned to be fixed in the future (TODO).
@@ -832,6 +862,7 @@ rpc_srv_get_dirents_extended(hg_handle_t handle) {
 #ifdef HAS_SYMLINKS
 /**
  * @brief Serves a request create a symbolic link. This function is UNUSED.
+ * lxl 创建软连接
  * @internal
  * The state of this function is unclear and requires a complete refactor.
  *

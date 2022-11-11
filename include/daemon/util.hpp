@@ -35,6 +35,7 @@
 namespace gkfs::utils {
 /**
  * @brief Registers the daemon's RPC address to the shared hosts file.
+ * // lxl 将守护进程的rpc地址注册到host_file
  * @throws std::runtime_error when file stream fails
  */
 void
@@ -42,6 +43,7 @@ populate_hosts_file();
 
 /**
  * @brief Attempts to remove the entire hosts file.
+ * // lxl 删除整个host_file
  */
 void
 destroy_hosts_file();

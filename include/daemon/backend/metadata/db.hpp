@@ -28,6 +28,7 @@
 /**
  * @brief Class declaration for MetadataDB class which uses RocksDB and provides
  * a single instance within the daemon.
+ * MetadataDB类的类声明，它使用RocksDB并在守护进程中提供一个实例。
  */
 #ifndef GEKKOFS_METADATA_DB_HPP
 #define GEKKOFS_METADATA_DB_HPP
@@ -55,6 +56,7 @@ class MetadataDB {
 private:
     std::string path_;
     std::shared_ptr<spdlog::logger> log_;
+    // 数据库实例
     std::unique_ptr<AbstractMetadataBackend> backend_;
 
 public:
@@ -119,7 +121,7 @@ public:
 
     /**
      * @brief Increases only the size part of the metadata entry via a RocksDB
-     * Operand.
+     * Operand. 增加一部分大小
      * @param key KV store key
      * @param size new size for entry
      * @param append
@@ -130,7 +132,7 @@ public:
 
     /**
      * @brief Decreases only the size part of the metadata entry via a RocksDB
-     * Operand/
+     * Operand/ 减少一部分大小
      * @param key KV store key
      * @param size new size for entry
      * @throws DBException on failure, NotFoundException if entry doesn't exist
@@ -140,7 +142,8 @@ public:
 
     /**
      * @brief Return all file names and modes for the first-level entries of the
-     * given directory.
+     * given directory. 
+     * 返回给定目录的第一级条目的所有文件名和模式。
      * @param dir directory prefix string
      * @return vector of pair <std::string name, bool is_dir>,
      *         where name is the name of the entries and is_dir
@@ -152,6 +155,7 @@ public:
     /**
      * @brief Return all file names and modes for the first-level entries of the
      * given directory including their sizes and creation time.
+     * 返回给定目录的第一级条目的所有文件名和模式，包括它们的大小和创建时间。
      * @param dir directory prefix string
      * @return vector of pair <std::string name, bool is_dir - size - ctime>,
      *         where name is the name of the entries and is_dir
@@ -163,6 +167,7 @@ public:
     /**
      * @brief Iterate over complete database, note ONLY used for debugging and
      * is therefore unused.
+     * 遍历完整数据库，注意仅用于调试，因此未使用。
      */
     void
     iterate_all() const;

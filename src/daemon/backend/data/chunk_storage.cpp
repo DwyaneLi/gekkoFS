@@ -68,6 +68,10 @@ ChunkStorage::absolute(const string& internal_path) const {
  * /tmp/rootdir/<pid>/data/chunks/foo:bar. Each chunk is then its own file,
  * numbered by its index, e.g., /tmp/rootdir/<pid>/data/chunks/foo:bar/0 for the
  * first chunk file.
+ * 所有GekkoFS文件都放在rootdir目录中，每个GekkoFS文件都由本地文件系统上的一个目录表示。
+ * 我们不镜像本地文件系统上的目录层次结构。因此，“/mnt/gekkofs_mount/foo/bar”路径有内部路径“/tmp/rootdir//data/chunks/foo:bar”。
+ * </pid>每个块都是它自己的文件，按索引编号，例如，第一个块文件为/tmp/rootdir//data/chunks/foo:bar/0。</pid>
+ * 其实就是一个字符串替换，/foo/bar 变成 /fool:bar
  * @endinternal
  */
 string
@@ -78,6 +82,7 @@ ChunkStorage::get_chunks_dir(const string& file_path) {
     return chunk_dir;
 }
 
+// 其实就是一个字符串替换，/foo/bar 变成 /fool:bar/chunk_id
 string
 ChunkStorage::get_chunk_path(const string& file_path,
                              gkfs::rpc::chnk_id_t chunk_id) {
@@ -107,6 +112,7 @@ ChunkStorage::ChunkStorage(string& path, const size_t chunksize)
     assert(log_);
     assert(gkfs::path::is_absolute(root_path_));
     // Verify that we have sufficient access for chunk directories
+    // 验证是否对块目录有足够的访问权限
     if(access(root_path_.c_str(), W_OK | R_OK) != 0) {
         auto err_str = fmt::format(
                 "{}() Insufficient permissions to create chunk directories in path '{}'",
@@ -148,7 +154,7 @@ ChunkStorage::write_chunk(const string& file_path,
     assert((offset + size) <= chunksize_);
     // may throw ChunkStorageException on failure
     init_chunk_space(file_path);
-
+    // 获取全路径
     auto chunk_path = absolute(get_chunk_path(file_path, chunk_id));
 
     FileHandle fh(open(chunk_path.c_str(), O_WRONLY | O_CREAT, 0640),
@@ -162,7 +168,7 @@ ChunkStorage::write_chunk(const string& file_path,
 
     size_t wrote_total{};
     ssize_t wrote{};
-
+    // 写入
     do {
         wrote = pwrite(fh.native(), buf + wrote_total, size - wrote_total,
                        offset + wrote_total);
@@ -181,6 +187,7 @@ ChunkStorage::write_chunk(const string& file_path,
     } while(wrote_total != size);
 
     // file is closed via the file handle's destructor.
+    // 文件会关闭的，因为设置了file_handle的解构函数
     return wrote_total;
 }
 
@@ -216,6 +223,9 @@ ChunkStorage::read_chunk(const string& file_path, gkfs::rpc::chnk_id_t chunk_id,
              * size argument is also zero). This is not considered an error. If
              * you keep calling read while at end-of-file, it will keep
              * returning zero and doing nothing else. Hence, we break here.
+             * 0的值表示文件结束(除非size参数的值也是0)。这并不被认为是错误。
+             * 如果在文件结束时继续调用read，它将继续返回0，而不做其他任何事情。
+             * 因此，我们在这里break。
              */
             break;
         }
@@ -223,6 +233,7 @@ ChunkStorage::read_chunk(const string& file_path, gkfs::rpc::chnk_id_t chunk_id,
         if(read < 0) {
             // retry if a signal or anything else has interrupted the read
             // system call
+            //如果有信号或其他东西中断了read系统调用，则重试
             if(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
                 continue;
             auto err_str = fmt::format(
@@ -252,11 +263,14 @@ ChunkStorage::read_chunk(const string& file_path, gkfs::rpc::chnk_id_t chunk_id,
  * that prevents other processes from modifying anything in that directory. It
  * is the application's responsibility to stop modifying the file while truncate
  * is executed.
- *
+ * 注意这里的最终一致性:当块被移除时，没有阻止其他进程修改该目录中的任何内容的锁。在执行truncate时，
+ * 由应用程序负责停止修改文件。
  * If an error is encountered when removing a chunk file, the function will
  * still remove all files and report the error afterwards with
  * ChunkStorageException.
+ * 如果在删除块文件时遇到错误，该函数仍然会删除所有文件，然后使用ChunkStorageException报告错误。
  * @endinternal
+ * 这函数就是删除所有大于chunk_id_start的块
  */
 void
 ChunkStorage::trim_chunk_space(const string& file_path,
@@ -287,6 +301,7 @@ ChunkStorage::trim_chunk_space(const string& file_path,
                         __func__, file_path));
 }
 
+// 这个函数是截断某个chunk里的数据，针对单个chunk
 void
 ChunkStorage::truncate_chunk_file(const string& file_path,
                                   gkfs::rpc::chnk_id_t chunk_id, off_t length) {

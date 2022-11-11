@@ -44,6 +44,7 @@
 
 using namespace std;
 
+// 外部变量，用于rpc传输
 std::unique_ptr<hermes::async_engine> ld_network_service; // extern variable
 
 namespace {
@@ -65,6 +66,9 @@ exit_error_msg(int errcode, const string& msg) {
     // if we don't disable interception before calling ::exit()
     // syscall hooks may find an inconsistent in shared state
     // (e.g. the logger) and thus, crash
+    // lxl
+    // 如果我们在调用::exit()之前不禁用拦截，系统调用钩子可能会在
+    // 共享状态(例如记录器)中发现不一致，从而崩溃
     gkfs::preload::stop_interception();
     CTX->disable_interception();
     ::exit(errcode);
@@ -72,6 +76,7 @@ exit_error_msg(int errcode, const string& msg) {
 
 /**
  * Initializes the Hermes client for a given transport prefix
+ * // 初始化hermes客户端
  * @return true if successfully initialized; false otherwise
  */
 bool
@@ -80,7 +85,7 @@ init_hermes_client() {
     try {
 
         hermes::engine_options opts{};
-
+        // lxl 设置传输协议
         if(CTX->auto_sm())
             opts |= hermes::use_auto_sm;
         if(gkfs::rpc::protocol::ofi_psm2 == CTX->rpc_protocol()) {
@@ -177,6 +182,7 @@ namespace gkfs::preload {
 /**
  * This function is only called in the preload constructor and initializes
  * the file system client
+ * 此函数只在预加载构造函数中调用，并初始化文件系统客户端
  */
 void
 init_environment() {
@@ -205,6 +211,7 @@ init_environment() {
     }
 
     /* Setup distributor */
+    //lxl 根据不同的宏定义设置distributor
 #ifdef GKFS_ENABLE_FORWARDING
     try {
         gkfs::utils::load_forwarding_map();
@@ -232,7 +239,7 @@ init_environment() {
 
 
     LOG(INFO, "Retrieving file system configuration...");
-
+    // lxl 获取配置
     if(!gkfs::rpc::forward_get_fs_config()) {
         exit_error_msg(
                 EXIT_FAILURE,
@@ -269,6 +276,10 @@ init_preload() {
     // [MAX_USER_FDS, MAX_OPEN_FDS) range. To prevent this for our internal
     // initialization code, we forcefully occupy the user fd range to force
     // such modules to create fds in our private range.
+    // lxl 诸如ib_uverbs这样的内核模块可以在内核空间中创建fds，并使用类似ioctl()的接口将
+    // 它们传递给用户空间进程。如果这发生在我们的内部初始化过程中，我们没有办法控制这
+    // 个创建过程，fd将被创建在[0,MAX_USER_FDS)范围内，而不是在我们的私有[MAX_USER_FDS, MAX_OPEN_FDS)范围内。
+    // 为了防止内部初始化代码出现这种情况，我们强制占用用户fd范围，以迫使这些模块在我们的私有范围内创建fds。
     CTX->protect_user_fds();
 
     log_prog_name();
@@ -278,6 +289,7 @@ init_preload() {
     gkfs::preload::init_environment();
     CTX->enable_interception();
 
+    // lxl 初始化完之后再释放
     CTX->unprotect_user_fds();
 
 #ifdef GKFS_ENABLE_FORWARDING

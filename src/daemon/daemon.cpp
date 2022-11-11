@@ -30,6 +30,7 @@
  * @internal
  * This file includes the daemon's main() function and starts all daemon
  * subroutines. It deals with user input and waits on a signal to shut it down.
+ * 该文件包含守护进程的main()函数，并启动所有守护进程子例程。它处理用户输入并等待一个关闭它的信号。
  * @endinternal
  */
 
@@ -69,9 +70,10 @@ using namespace std;
 namespace fs = std::filesystem;
 
 static condition_variable shutdown_please; // handler for shutdown signaling
-static mutex mtx; // mutex to wait on shutdown conditional variable
+static mutex mtx; // mutex to wait on shutdown conditional variable 上面那个变量的信号灯
 static bool keep_rootdir = true;
 
+// 客户端选项
 struct cli_options {
     string mountdir;
     string rootdir;
@@ -88,20 +90,25 @@ struct cli_options {
 
 /**
  * @brief Initializes the Argobots execution streams for non-blocking I/O
+ * 为非阻塞I/O初始化Argobots执行流
  * @internal
  * The corresponding execution streams are defined in
  * gkfs::config::rpc::daemon_io_xstreams. A FIFO thread pool accomodates these
  * execution streams. Argobots tasklets are created from these pools during I/O
  * operations.
+ * 相应的执行流在gkfs::config::rpc::daemon_io_xstreams中定义。FIFO线程池容纳这些执行流。
+ * Argobots微线程是在I/O操作期间从这些池创建的。
  * @endinternal
  */
 void
 init_io_tasklet_pool() {
     static_assert(gkfs::config::rpc::daemon_io_xstreams >= 0,
                   "Daemon IO Execution streams must be higher than 0!");
+    // 获取执行流数目
     unsigned int xstreams_num = gkfs::config::rpc::daemon_io_xstreams;
 
     // retrieve the pool of the just created scheduler
+    // 检索刚刚创建的调度程序的池 其实就是创建热舞调度的池
     ABT_pool pool;
     auto ret = ABT_pool_create_basic(ABT_POOL_FIFO_WAIT, ABT_POOL_ACCESS_MPMC,
                                      ABT_TRUE, &pool);
@@ -111,6 +118,7 @@ init_io_tasklet_pool() {
 
     // create all subsequent xstream and the associated scheduler, all tapping
     // into the same pool
+    // 创建所有后续的xstream和相关的调度器，所有都进入相同的池
     vector<ABT_xstream> xstreams(xstreams_num);
     for(unsigned int i = 0; i < xstreams_num; ++i) {
         ret = ABT_xstream_create_basic(ABT_SCHED_BASIC_WAIT, 1, &pool,
@@ -120,16 +128,19 @@ init_io_tasklet_pool() {
                     "Failed to create task execution streams for I/O operations");
         }
     }
-
+    // 都放到rpc_data实例里
     RPC_DATA->io_streams(xstreams);
     RPC_DATA->io_pool(pool);
 }
 
 /**
  * @brief Registers RPC handlers to a given Margo instance.
+ * 将RPC处理程序注册到给定的Margo实例。
  * @internal
  * Registering is done by associating a Margo instance id (mid) with the RPC
  * name and its handler function including defined input/out structs
+ * 注册是通过将Margo实例id(mid)与RPC名称及其处理函数(包括定义的输入/输出结构)相关联来完成的
+ * mid rpc名称 输入 输出 处理函数名
  * @endinternal
  * @param margo_instance_id
  */
@@ -177,12 +188,13 @@ register_server_rpcs(margo_instance_id mid) {
 
 /**
  * @brief Initializes the daemon RPC server.
+ * // 设置margo实例和监听addr
  * @throws std::runtime_error on failure
  */
 void
 init_rpc_server() {
     hg_addr_t addr_self = nullptr;
-    hg_size_t addr_self_cstring_sz = 128;
+    hg_size_t addr_self_cstring_sz = 128; // 应该是地址长度的意思
     char addr_self_cstring[128];
     struct hg_init_info hg_options = HG_INIT_INFO_INITIALIZER;
     hg_options.auto_sm = GKFS_DATA->use_auto_sm() ? HG_TRUE : HG_FALSE;
@@ -190,6 +202,7 @@ init_rpc_server() {
     if(gkfs::rpc::protocol::ofi_psm2 == GKFS_DATA->rpc_protocol())
         hg_options.na_init_info.progress_mode = NA_NO_BLOCK;
     // Start Margo (this will also initialize Argobots and Mercury internally)
+    // 启动Margo(这也会在内部初始化Argobots和Mercury)，mid是margo id
     auto margo_config = fmt::format(
             R"({{ "use_progress_thread" : true, "rpc_thread_count" : {} }})",
             gkfs::config::rpc::daemon_handler_xstreams);
@@ -204,12 +217,14 @@ init_rpc_server() {
     }
     // Figure out what address this server is listening on (must be freed when
     // finished)
+    // 找出这个服务器正在监听的地址(完成时必须释放)
     auto hret = margo_addr_self(mid, &addr_self);
     if(hret != HG_SUCCESS) {
         margo_finalize(mid);
         throw runtime_error("Failed to retrieve server RPC address");
     }
     // Convert the address to a cstring (with \0 terminator).
+    // 将地址转换为cstring(带有\0终止符)。
     hret = margo_addr_to_string(mid, addr_self_cstring, &addr_self_cstring_sz,
                                 addr_self);
     if(hret != HG_SUCCESS) {
@@ -234,11 +249,12 @@ init_rpc_server() {
 
 /**
  * @brief Initializes the daemon environment and setting up its subroutines.
+ * 初始化守护进程环境并设置它的子例程。
  * @internal
  * This includes connecting to the KV store, starting the Argobots I/O execution
  * streams, initializing the metadata and data backends, and starting the RPC
  * server.
- *
+ * 这包括连接到KV存储，启动Argobots I/O执行流，初始化元数据和数据后端，以及启动RPC服务器。
  * Finally, the root metadata entry is created.
  * @endinternal
  * @throws std::runtime_error if any step fails
@@ -246,6 +262,7 @@ init_rpc_server() {
 void
 init_environment() {
     // Initialize metadata db
+    // 初始化元数据数据库
     auto metadata_path = fmt::format("{}/{}", GKFS_DATA->metadir(),
                                      gkfs::config::metadata::dir);
     fs::create_directories(metadata_path);
@@ -261,6 +278,7 @@ init_environment() {
         throw;
     }
 
+    // 初始化distributor，也就是用来hash的
     GKFS_DATA->spdlogger()->debug("{}() Initializing Distributor ", __func__);
     try {
 #ifdef GKFS_USE_GUIDED_DISTRIBUTION
@@ -317,6 +335,7 @@ init_environment() {
     }
 
     // Init margo for RPC
+    // 用init_rpc_server()初始化margo
     GKFS_DATA->spdlogger()->debug("{}() Initializing RPC server: '{}'",
                                   __func__, GKFS_DATA->bind_addr());
     try {
@@ -328,6 +347,7 @@ init_environment() {
     }
 
     // Init Argobots ESs to drive IO
+    // 初始化Argobots ESs以驱动IO 使用init_io_tasklet_pool()
     try {
         GKFS_DATA->spdlogger()->debug("{}() Initializing I/O pool", __func__);
         init_io_tasklet_pool();
@@ -346,7 +366,8 @@ init_environment() {
     GKFS_DATA->link_cnt_state(gkfs::config::metadata::use_link_cnt);
     GKFS_DATA->blocks_state(gkfs::config::metadata::use_blocks);
     // Create metadentry for root directory
-    gkfs::metadata::Metadata root_md{S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO};
+    // 为根目录创建元条目
+    gkfs::metadata::Metadata root_md{S_IFDIR | S_IRWXU | S_IRWXG | S_IRWXO}; //初始化mode
     try {
         gkfs::metadata::create("/", root_md);
     } catch(const gkfs::metadata::ExistsException& e) {
@@ -356,6 +377,7 @@ init_environment() {
                             e.what());
     }
     // setup hostfile to let clients know that a daemon is running on this host
+    // 设置hostfile，让客户端知道这个主机上正在运行一个守护进程
     if(!GKFS_DATA->hosts_file().empty()) {
         gkfs::utils::populate_hosts_file();
     }
@@ -385,6 +407,7 @@ agios_initialize() {
 /**
  * @brief Destroys the daemon environment and gracefully shuts down all
  * subroutines.
+ * 破坏守护程序环境并优雅地关闭所有子例程。
  * @internal
  * Shutting down includes freeing Argobots execution streams, cleaning
  * hostsfile, and shutting down the Mercury RPC server.
@@ -394,6 +417,7 @@ void
 destroy_enviroment() {
     GKFS_DATA->spdlogger()->debug("{}() Removing mount directory", __func__);
     std::error_code ecode;
+    // 删除挂载目录下的所有东西
     fs::remove_all(GKFS_DATA->mountdir(), ecode);
     GKFS_DATA->spdlogger()->debug("{}() Freeing I/O executions streams",
                                   __func__);
@@ -434,8 +458,10 @@ destroy_enviroment() {
 
 /**
  * @brief Handler for daemon shutdown signal handling.
+ * 用于守护进程关闭信号处理的处理程序。
  * @internal
  * Notifies the waiting thread in main() to wake up.
+ * 通知main()中的等待线程唤醒。
  * @endinternal
  * @param dummy unused but required by signal() called in main()
  */
@@ -448,9 +474,11 @@ shutdown_handler(int dummy) {
 
 /**
  * @brief Initializes the daemon logging environment.
+ * 初始化守护进程日志记录环境。
  * @internal
  * Reads user input via environment variables regarding the
  * log path and log level.
+ * 通过有关日志路径和日志级别的环境变量读取用户输入。
  * @endinternal
  * Initializes three loggers: main, metadata module, and data module
  */
@@ -486,6 +514,7 @@ initialize_loggers() {
 
 /**
  * @brief Parses command line arguments from user
+ * 解析来自用户的命令行参数
  *
  * @param opts CLI values
  * @param desc CLI allowed options
@@ -515,6 +544,7 @@ parse_input(const cli_options& opts, const CLI::App& desc) {
     if(desc.count("--listen")) {
         addr = opts.listen;
         // ofi+verbs requires an empty addr to bind to the ib interface
+        // Ofi+verbs需要一个空addr绑定到ib接口
         if(rpc_protocol == gkfs::rpc::protocol::ofi_verbs) {
             /*
              * FI_VERBS_IFACE : The prefix or the full name of the network
@@ -546,6 +576,7 @@ parse_input(const cli_options& opts, const CLI::App& desc) {
     auto mountdir = opts.mountdir;
     // Create mountdir. We use this dir to get some information on the
     // underlying fs with statfs in gkfs_statfs
+    // 创建mountdir。我们使用这个dir在gkfs_statfs中获取底层fs的一些信息
     fs::create_directories(mountdir);
     GKFS_DATA->mountdir(fs::canonical(mountdir).native());
 
@@ -622,6 +653,7 @@ parse_input(const cli_options& opts, const CLI::App& desc) {
 #endif
     }
 
+    // 设置元数据数据库类型，默认是rocksdb
     if(desc.count("--dbbackend")) {
         if(opts.dbbackend == gkfs::metadata::rocksdb_backend ||
            opts.dbbackend == gkfs::metadata::parallax_backend) {
@@ -716,6 +748,7 @@ parse_input(const cli_options& opts, const CLI::App& desc) {
  * @internal
  * Launches all subroutines and waits on a conditional variable to shut it down.
  * Daemon will react to the following signals:
+ * 启动所有子程序并等待条件变量将其关闭。Daemon会对以下信号做出反应:
  *
  * SIGINT - Interrupt from keyboard (ctrl-c)
  * SIGTERM - Termination signal (kill <daemon_pid>
@@ -805,7 +838,7 @@ main(int argc, const char* argv[]) {
         return desc.exit(e);
     }
 
-
+    // 输出统计信息
     if(desc.count("--version")) {
         cout << GKFS_VERSION_STRING << endl;
 #ifndef NDEBUG

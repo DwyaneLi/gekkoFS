@@ -57,6 +57,7 @@ MergeOperand::get_id(const rdb::Slice& serialized_op) {
 rdb::Slice
 MergeOperand::get_params(const rdb::Slice& serialized_op) {
     assert(serialized_op[1] == operand_id_suffix);
+    // id和：分别占了一个char，所以是加2
     return {serialized_op.data() + 2, serialized_op.size() - 2};
 }
 
@@ -64,6 +65,8 @@ IncreaseSizeOperand::IncreaseSizeOperand(const size_t size, const bool append)
     : size(size), append(append) {}
 
 IncreaseSizeOperand::IncreaseSizeOperand(const rdb::Slice& serialized_op) {
+    // size,flag
+    // lxl 初始化
     size_t chrs_parsed = 0;
     size_t read = 0;
 
@@ -87,6 +90,7 @@ IncreaseSizeOperand::id() const {
 
 string
 IncreaseSizeOperand::serialize_params() const {
+    // size,flag
     string s;
     s.reserve(3);
     s += ::to_string(size);
@@ -103,6 +107,7 @@ DecreaseSizeOperand::DecreaseSizeOperand(const rdb::Slice& serialized_op) {
     size_t read = 0;
     // we need to convert serialized_op to a string because it doesn't contain
     // the leading slash needed by stoul
+    // 我们需要将serialized_op转换为字符串，因为它不包含stoul所需的前导斜杠
     size = ::stoul(serialized_op.ToString(), &read);
     // check that we consumed all the input string
     assert(read == serialized_op.size());
@@ -115,6 +120,7 @@ DecreaseSizeOperand::id() const {
 
 string
 DecreaseSizeOperand::serialize_params() const {
+    //size
     return ::to_string(size);
 }
 
@@ -137,9 +143,11 @@ MetadataMergeOperator::FullMergeV2(const MergeOperationInput& merge_in,
                                    MergeOperationOutput* merge_out) const {
 
     string prev_md_value;
+    // operland_list里记录的是操作序列
     auto ops_it = merge_in.operand_list.cbegin();
-
+    // 说明一开始key值不存在
     if(merge_in.existing_value == nullptr) {
+        // 第一个必须是创建
         // The key to operate on doesn't exists in DB
         if(MergeOperand::get_id(ops_it[0]) != OperandID::create) {
             throw ::runtime_error(
@@ -157,7 +165,7 @@ MetadataMergeOperator::FullMergeV2(const MergeOperationInput& merge_in,
     Metadata md{prev_md_value};
 
     size_t fsize = md.size();
-
+    // 按操作序列进行操作
     for(; ops_it != merge_in.operand_list.cend(); ++ops_it) {
         const rdb::Slice& serialized_op = *ops_it;
         assert(serialized_op.size() >= 2);

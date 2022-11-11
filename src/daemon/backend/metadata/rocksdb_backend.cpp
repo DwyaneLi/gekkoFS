@@ -48,9 +48,11 @@ namespace gkfs::metadata {
 RocksDBBackend::RocksDBBackend(const std::string& path) {
 
     // Optimize RocksDB. This is the easiest way to get RocksDB to perform well
+    // 优化RocksDB。这是使RocksDB运行良好的最简单方法
     options_.IncreaseParallelism();
     options_.OptimizeLevelStyleCompaction();
     // create the DB if it's not already present
+    // 如果数据库还不存在，就创建它
     options_.create_if_missing = true;
     options_.merge_operator.reset(new MetadataMergeOperator);
     optimize_database_impl();
@@ -256,6 +258,7 @@ RocksDBBackend::get_dirents_impl(const std::string& dir) const {
         auto name = it->key().ToString();
         if(name.find_first_of('/', root_path.size()) != std::string::npos) {
             // skip stuff deeper then one level depth
+            // 跳过更深一层的
             continue;
         }
         // remove prefix
